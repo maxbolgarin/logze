@@ -90,7 +90,7 @@ Released under the [MIT License]
 [MIT License]: LICENSE.txt
 [doc-img]: https://pkg.go.dev/badge/github.com/maxbolgarin/logze
 [doc]: https://pkg.go.dev/github.com/maxbolgarin/logze
-[ci-img]: https://github.com/maxbolgarin/logze/workflows/build/badge.svg
+[ci-img]: https://github.com/maxbolgarin/logze/actions/workflows/go.yml/badge.svg
 [ci]: https://github.com/maxbolgarin/logze/actions
 [report-img]: https://goreportcard.com/badge/github.com/maxbolgarin/logze
 [report]: https://goreportcard.com/report/github.com/maxbolgarin/logze
