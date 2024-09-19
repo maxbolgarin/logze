@@ -1,6 +1,6 @@
 # logze
 
-[![GoDoc][doc-img]][doc]
+[![GoDoc][doc-img]][doc] [![Build][ci-img]][ci] [![GoReport][report-img]][report]
 
 Package `logze` implements a [zerolog](https://github.com/rs/zerolog) wrapper providing a convenient and short interface for structural logging
 
@@ -90,3 +90,7 @@ Released under the [MIT License]
 [MIT License]: LICENSE.txt
 [doc-img]: https://pkg.go.dev/badge/github.com/maxbolgarin/logze
 [doc]: https://pkg.go.dev/github.com/maxbolgarin/logze
+[ci-img]: https://github.com/maxbolgarin/logze/workflows/build/badge.svg
+[ci]: https://github.com/maxbolgarin/logze/actions
+[report-img]: https://goreportcard.com/badge/github.com/maxbolgarin/logze
+[report]: https://goreportcard.com/report/github.com/maxbolgarin/logze
