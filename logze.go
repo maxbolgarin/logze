@@ -303,3 +303,24 @@ func (l Logger) incErrorConter() {
 		l.errCounter.Inc()
 	}
 }
+
+// SLogger is a wrapper for [Logger].
+// It provides the same methods as [Logger] but with another Error interface (slog style).
+type SLogger struct {
+	Logger
+}
+
+// ConvertToS converts [Logger] to [SLogger].
+func ConvertToS(l Logger) SLogger {
+	return SLogger{Logger: l}
+}
+
+// Error logs a message in error level adding provided fields.
+func (l SLogger) Error(msg string, fields ...any) {
+	l.Logger.Error(nil, msg, fields...)
+}
+
+// Errorf logs a formatted message in error level adding provided fields after formatting args.
+func (l SLogger) Errorf(msg string, fields ...any) {
+	l.Logger.Errorf(nil, msg, fields...)
+}
