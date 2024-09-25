@@ -18,6 +18,7 @@ type Logger struct {
 	l          zerolog.Logger
 	errCounter ErrorCounter
 	stackTrace bool
+	inited     bool
 }
 
 // New returns a new [Logger] with provided config and fields.
@@ -75,12 +76,17 @@ func New(cfg Config, fields ...any) Logger {
 		cfg.ErrorCounter = noopErrorCounter{}
 	}
 
-	return Logger{l, cfg.ErrorCounter, cfg.StackTrace}
+	return Logger{l, cfg.ErrorCounter, cfg.StackTrace, true}
 }
 
 // NewDefault returns a new [Logger] with logging to stderr.
 func NewDefault(fields ...any) Logger {
 	return New(NewConfig().WithConsoleJSON(), fields...)
+}
+
+// NotInited returns true if [Logger] is not inited (struct with default values).
+func (l Logger) NotInited() bool {
+	return !l.inited
 }
 
 // WithFields returns [Logger] with applied fields to all messages, provided as (key, value) pairs.
