@@ -49,6 +49,10 @@ type Config struct {
 	// Default value is nil.
 	Hook zerolog.Hook
 
+	// ToIgnore is a list of messages that will be ignored.
+	// Default value is nil.
+	ToIgnore []string
+
 	// ErrorCounter is a counter of logged errors. Use WithSimpleErrorCounter method to use a simple counter.
 	// Default value is nil.
 	ErrorCounter ErrorCounter
@@ -115,6 +119,12 @@ func (c Config) WithConsoleNoColor() Config {
 // WithConsoleJSON returns [Config] with a configurated output to stderr in a JSON format.
 func (c Config) WithConsoleJSON() Config {
 	return c.WithWriter(os.Stderr)
+}
+
+// WithToIgnore returns [Config] with a list of messages that will be ignored.
+func (c Config) WithToIgnore(toIgnore ...string) Config {
+	c.ToIgnore = toIgnore
+	return c
 }
 
 // WithDiodeSize returns [Config] with a new size of diode writer.

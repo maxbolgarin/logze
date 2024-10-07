@@ -17,6 +17,7 @@ import (
 type Logger struct {
 	l          zerolog.Logger
 	errCounter ErrorCounter
+	toIgnore   []string
 	stackTrace bool
 	inited     bool
 }
@@ -76,7 +77,13 @@ func New(cfg Config, fields ...any) Logger {
 		cfg.ErrorCounter = noopErrorCounter{}
 	}
 
-	return Logger{l, cfg.ErrorCounter, cfg.StackTrace, true}
+	return Logger{
+		l:          l,
+		toIgnore:   cfg.ToIgnore,
+		errCounter: cfg.ErrorCounter,
+		stackTrace: cfg.StackTrace,
+		inited:     true,
+	}
 }
 
 // NewDefault returns a new [Logger] with logging to stderr.
@@ -261,14 +268,24 @@ func (l Logger) GetErrorCounter() ErrorCounter {
 	return l.errCounter
 }
 
-func (Logger) log(ev *zerolog.Event, msg string, fields []any) {
+func (l Logger) log(ev *zerolog.Event, msg string, fields []any) {
+	for _, ignore := range l.toIgnore {
+		if strings.Contains(msg, ignore) {
+			return
+		}
+	}
 	if len(fields) > 1 {
 		ev = ev.Fields(fields)
 	}
 	ev.Msg(msg)
 }
 
-func (Logger) logf(ev *zerolog.Event, msg string, args []any) {
+func (l Logger) logf(ev *zerolog.Event, msg string, args []any) {
+	for _, ignore := range l.toIgnore {
+		if strings.Contains(msg, ignore) {
+			return
+		}
+	}
 	numberOfFormats := strings.Count(msg, "%")
 	if numberOfFormats > 0 && numberOfFormats <= len(args) {
 		ev = ev.Fields(args[numberOfFormats:])
