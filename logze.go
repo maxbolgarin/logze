@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/diode"
+	"github.com/rs/zerolog/pkgerrors"
 )
 
 // Logger represents an initialized logger. Default value behaves as default [zerolog.Logger].
@@ -76,6 +77,8 @@ func New(cfg Config, fields ...any) Logger {
 	if cfg.ErrorCounter == nil {
 		cfg.ErrorCounter = noopErrorCounter{}
 	}
+
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
 	return Logger{
 		l:          l,
