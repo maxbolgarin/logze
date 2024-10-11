@@ -18,6 +18,15 @@ func Init(cfg Config, fields ...any) {
 	SetLoggerForDefault(Log)
 }
 
+// Update calls [Logger.Update] method for global [Log].
+// It also calls [SetLoggerForDefault] with this new logger.
+// It is not safe for concurrent use!
+func Update(cfg Config, fields ...any) {
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+	Log.Update(cfg, fields...)
+	SetLoggerForDefault(Log)
+}
+
 // SetLoggerForDefault sets priovded [Logger] with (key, value) pairs as writer for default Go logger and also
 // calls stdlog.SetFlags(0).
 func SetLoggerForDefault(l Logger, fields ...any) {

@@ -96,6 +96,17 @@ func Nop() Logger {
 	return Logger{l: zerolog.Nop()}
 }
 
+// Update replaces underlying logger with a new one created using provided config and fields.
+// It is not safe for concurrent use!
+func (l *Logger) Update(cfg Config, fields ...any) {
+	newLogger := New(cfg, fields...)
+	l.l = newLogger.l
+	l.inited = newLogger.inited
+	l.errCounter = newLogger.errCounter
+	l.stackTrace = newLogger.stackTrace
+	l.toIgnore = newLogger.toIgnore
+}
+
 // NotInited returns true if [Logger] is not inited (struct with default values).
 func (l Logger) NotInited() bool {
 	return !l.inited
