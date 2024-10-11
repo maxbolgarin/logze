@@ -102,6 +102,11 @@ func (l Logger) WithFields(fields ...any) Logger {
 	return l
 }
 
+// With is a shortcut for [Logger.WithFields].
+func (l Logger) With(fields ...any) Logger {
+	return l.WithFields(fields...)
+}
+
 // WithLevel returns [Logger] with an applied log level.
 func (l Logger) WithLevel(level string) Logger {
 	if level == "" {

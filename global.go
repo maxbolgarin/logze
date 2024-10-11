@@ -30,6 +30,11 @@ func WithFields(fields ...any) Logger {
 	return Log.WithFields(fields...)
 }
 
+// With is a shortcut for [WithFields].
+func With(fields ...any) Logger {
+	return Log.With(fields...)
+}
+
 // WithLevel returns [Logger] with applied log level, based on a global logger.
 func WithLevel(level string) Logger {
 	return Log.WithLevel(level)
