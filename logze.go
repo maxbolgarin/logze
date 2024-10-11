@@ -91,6 +91,11 @@ func NewDefault(fields ...any) Logger {
 	return New(NewConfig().WithConsoleJSON(), fields...)
 }
 
+// Nop returns a new [Logger] with no logging.
+func Nop() Logger {
+	return Logger{l: zerolog.Nop()}
+}
+
 // NotInited returns true if [Logger] is not inited (struct with default values).
 func (l Logger) NotInited() bool {
 	return !l.inited
