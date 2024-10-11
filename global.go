@@ -4,7 +4,6 @@ import (
 	stdlog "log"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/pkgerrors"
 )
 
 // Log is a global logger.
@@ -13,7 +12,6 @@ var Log = NewDefault()
 // Init calls [New] function and assigns the result to global [Log] variable.
 // It also calls [SetLoggerForDefault] with this new logger.
 func Init(cfg Config, fields ...any) {
-	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	Log = New(cfg, fields...)
 	SetLoggerForDefault(Log)
 }
@@ -22,7 +20,6 @@ func Init(cfg Config, fields ...any) {
 // It also calls [SetLoggerForDefault] with this new logger.
 // It is not safe for concurrent use!
 func Update(cfg Config, fields ...any) {
-	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	Log.Update(cfg, fields...)
 	SetLoggerForDefault(Log)
 }
