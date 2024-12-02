@@ -177,13 +177,10 @@ func getConsoleWriter(w io.Writer, color bool) zerolog.ConsoleWriter {
 	}
 }
 
-// ErrorCounter provides an interface to count logged errors. Every [ErrorCounter] should be created with a name
-// to distinguish in what part of the program an error was occurred. Use WithSimpleErrorCounter in [Config] creation
+// ErrorCounter provides an interface to count logged errors. Use WithSimpleErrorCounter in [Config] creation
 // to use a simple error counter and GetErrorCounter method in [Logger] to retrieve it.
 type ErrorCounter interface {
-	Name() string
-	Inc()
-	Get() int64
+	Inc(err ...error)
 }
 
 type simpleErrorCounter struct {
@@ -201,7 +198,7 @@ func (c *simpleErrorCounter) Name() string {
 	return c.name
 }
 
-func (c *simpleErrorCounter) Inc() {
+func (c *simpleErrorCounter) Inc(...error) {
 	c.count.Add(1)
 }
 
@@ -212,5 +209,5 @@ func (c *simpleErrorCounter) Get() int64 {
 type noopErrorCounter struct{}
 
 func (noopErrorCounter) Name() string { return "" }
-func (noopErrorCounter) Inc()         {}
+func (noopErrorCounter) Inc(...error) {}
 func (noopErrorCounter) Get() int64   { return 0 }

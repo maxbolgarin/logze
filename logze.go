@@ -217,22 +217,24 @@ func (l Logger) Errorf(err error, msg string, args ...any) {
 
 // Fatal logs a message in fatal level using fmt.Sprint to interpret args, then calls os.Exit(1).
 func (l Logger) Fatal(v ...any) {
-	l.log(l.l.WithLevel(zerolog.FatalLevel), fmt.Sprint(v...), nil)
-	l.incErrorConter()
+	s := fmt.Sprint(v...)
+	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
+	l.incErrorConter(errors.New(s))
 	os.Exit(1)
 }
 
 // Fatalf logs a formatted message in fatal level, then calls os.Exit(1).
 func (l Logger) Fatalf(format string, args ...any) {
 	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
-	l.incErrorConter()
+	l.incErrorConter(fmt.Errorf(format, args...))
 	os.Exit(1)
 }
 
 // Fatalln logs a message in fatal level using fmt.Sprintln to interpret args, then calls os.Exit(1).
 func (l Logger) Fatalln(v ...any) {
-	l.log(l.l.WithLevel(zerolog.FatalLevel), fmt.Sprintln(v...), nil)
-	l.incErrorConter()
+	s := fmt.Sprintln(v...)
+	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
+	l.incErrorConter(errors.New(s))
 	os.Exit(1)
 }
 
@@ -240,14 +242,14 @@ func (l Logger) Fatalln(v ...any) {
 func (l Logger) Panic(v ...any) {
 	s := fmt.Sprint(v...)
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
-	l.incErrorConter()
+	l.incErrorConter(errors.New(s))
 	panic(s)
 }
 
 // Panicf logs a formatted message in fatal level, then calls panic().
 func (l Logger) Panicf(format string, args ...any) {
 	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
-	l.incErrorConter()
+	l.incErrorConter(fmt.Errorf(format, args...))
 	panic(fmt.Sprintf(format, args...))
 }
 
@@ -255,7 +257,7 @@ func (l Logger) Panicf(format string, args ...any) {
 func (l Logger) Panicln(v ...any) {
 	s := fmt.Sprintln(v...)
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
-	l.incErrorConter()
+	l.incErrorConter(errors.New(s))
 	panic(s)
 }
 
@@ -335,13 +337,13 @@ func (l Logger) setErrorWithStack(err error, ev *zerolog.Event) *zerolog.Event {
 			err = errors.WithStack(err)
 		}
 	}
-	l.incErrorConter()
+	l.incErrorConter(err)
 	return ev.Err(err)
 }
 
-func (l Logger) incErrorConter() {
+func (l Logger) incErrorConter(err error) {
 	if l.errCounter != nil {
-		l.errCounter.Inc()
+		l.errCounter.Inc(err)
 	}
 }
 
