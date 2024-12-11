@@ -367,6 +367,11 @@ func ConvertToS(l Logger) SLogger {
 	return SLogger{Logger: l}
 }
 
+// S is a shortcut to [ConvertToS] that converts [Logger] to [SLogger].
+func S(l Logger) SLogger {
+	return SLogger{Logger: l}
+}
+
 // Error logs a message in error level adding provided fields.
 func (l SLogger) Error(msg string, fields ...any) {
 	l.Logger.Error(nil, msg, fields...)
