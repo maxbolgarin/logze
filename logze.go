@@ -1,21 +1,22 @@
-// Package logze implements a zerolog wrapper providing a convenient and short interface for structural logging.
+// Package logze implements a zerolog wrapper providing a convenient and short interface for structural logging based on slog package.
 package logze
 
 import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
-	"github.com/maxbolgarin/errm"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/diode"
 	"github.com/rs/zerolog/pkgerrors"
 )
 
-// Logger represents an initialized logger. Default value behaves as default [zerolog.Logger].
+// Logger represents an initialized logger.
+// Default value behaves as default [zerolog.Logger].
 type Logger struct {
 	l          zerolog.Logger
 	errCounter ErrorCounter
@@ -33,18 +34,23 @@ type Logger struct {
 //
 //	lg := New(C().WithConsoleJSON(), "foo", "bar")
 //	lg.Info("some message", "key", "value")
-//	lg.Error(errors.New("some error"), "cannot handle")
+//	lg.Err(errors.New("some error"), "cannot handle")
 //
 // You will have output:
 //
 //	{"level":"info","time":"2023-11-20T18:48:14+03:00","message":"some message","foo":"bar","key":"value"}
 //	{"level":"error","time":"2023-11-20T18:48:14+03:00","error":"some error","message":"cannot handle","foo":"bar"}
+//
+// Warning! If you use diode (default behaviour), logger need some time to flush messages.
+// Thats why you won't see any logs if you shoutdown your app right after logging.
+// Use [Config.WithNoDiode] to disable it,
+// but you will need to fix problem of blocking goroutine when writing may loge in Stderr if you have it.
 func New(cfg Config, fields ...any) Logger {
-	if len(cfg.Writers) == 0 || cfg.Level == DisabledLevel {
+	if len(cfg.Writers) == 0 || cfg.Level == LevelDisabled {
 		cfg.Writers = []io.Writer{io.Discard}
 	}
 	if cfg.Level == "" {
-		cfg.Level = InfoLevel
+		cfg.Level = LevelInfo
 	}
 	if cfg.TimeFieldFormat == "" {
 		cfg.TimeFieldFormat = time.RFC3339
@@ -60,9 +66,15 @@ func New(cfg Config, fields ...any) Logger {
 	if len(cfg.Writers) > 1 {
 		output = zerolog.MultiLevelWriter(cfg.Writers...)
 	}
-	if !cfg.DisableDiode {
+	if !cfg.NoDiode {
 		if cfg.DiodeSize == 0 {
 			cfg.DiodeSize = DefaultDiodeSize
+		}
+		if cfg.DiodePollingInterval == 0 {
+			cfg.DiodePollingInterval = DefaultDiodePollingInterval
+		}
+		if cfg.UseDiodeWaiter {
+			cfg.DiodePollingInterval = 0
 		}
 		if cfg.DiodeAlertFunc == nil {
 			cfg.DiodeAlertFunc = func(missed int) {
@@ -80,10 +92,6 @@ func New(cfg Config, fields ...any) Logger {
 		l = l.Hook(cfg.Hook)
 	}
 
-	if cfg.ErrorCounter == nil {
-		cfg.ErrorCounter = noopErrorCounter{}
-	}
-
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
 	return Logger{
@@ -98,14 +106,13 @@ func New(cfg Config, fields ...any) Logger {
 // NewFromZerolog returns a new [Logger] based on provided [zerolog.Logger].
 func NewFromZerolog(l zerolog.Logger) Logger {
 	return Logger{
-		l:          l,
-		inited:     true,
-		errCounter: noopErrorCounter{},
+		l:      l,
+		inited: true,
 	}
 }
 
-// NewDefault returns a new [Logger] with logging to stderr.
-func NewDefault(fields ...any) Logger {
+// NewConsoleJSON returns a new [Logger] with JSON logging to stderr.
+func NewConsoleJSON(fields ...any) Logger {
 	return New(NewConfig().WithConsoleJSON(), fields...)
 }
 
@@ -115,7 +122,7 @@ func Nop() Logger {
 }
 
 // Update replaces underlying logger with a new one created using provided config and fields.
-// It is not safe for concurrent use!
+// It is NOT safe for concurrent use.
 func (l *Logger) Update(cfg Config, fields ...any) {
 	newLogger := New(cfg, fields...)
 	l.l = newLogger.l
@@ -166,9 +173,9 @@ func (l Logger) WithErrorCounter(ec ErrorCounter) Logger {
 	return l
 }
 
-// WithSimpleErrorCounter returns [Logger] with a simple [ErrorCounter] inited with the provided name.
-func (l Logger) WithSimpleErrorCounter(name string) Logger {
-	l.errCounter = newErrorCounter(name)
+// WithSimpleErrorCounter returns [Logger] with a simple [ErrorCounter].
+func (l Logger) WithSimpleErrorCounter() Logger {
+	l.errCounter = newSimpleErrorCounter()
 	return l
 }
 
@@ -220,74 +227,95 @@ func (l Logger) Warnf(msg string, args ...any) {
 }
 
 // Err logs a provided error in error level adding provided fields.
-func (l Logger) Err(err error, fields ...any) {
-	l.Error(err, "", fields...)
+func (l Logger) Err(err error, msg string, fields ...any) {
+	l.log(l.setErrorWithStack(l.l.Error(), err), msg, fields)
 }
 
-// Error logs a provided error and message in error level adding provided fields.
-func (l Logger) Error(err error, msg string, fields ...any) {
-	ev := l.setErrorWithStack(err, l.l.Error())
-	l.log(ev, msg, fields)
+// Error logs a message in error level adding provided fields.
+func (l Logger) Error(msg string, fields ...any) {
+	l.log(l.l.Error(), msg, fields)
 }
 
-// Errorf logs a provided error and formatted message in error level adding provided fields after formatting args.
-func (l Logger) Errorf(err error, msg string, args ...any) {
-	ev := l.setErrorWithStack(err, l.l.Error())
-	l.logf(ev, msg, args)
+// Errorf logs a formatted message in error level adding provided fields after formatting args.
+func (l Logger) Errorf(msg string, args ...any) {
+	l.logf(l.l.Error(), msg, args)
+}
+
+// ErrStack logs a stack trace of provided error as message in error level adding fields.
+func (l Logger) ErrStack(err error, fields ...any) {
+	_, ok := err.(interface {
+		StackForLogger() []any
+	})
+	if !ok {
+		err = errors.WithStack(err)
+	}
+	l.log(l.l.Error(), fmt.Sprintf("%+v", err), fields)
 }
 
 // Fatal logs a message in fatal level using fmt.Sprint to interpret args, then calls os.Exit(1).
 func (l Logger) Fatal(v ...any) {
 	s := fmt.Sprint(v...)
-	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	l.incErrorConter(errors.New(s))
+	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	os.Exit(1)
 }
 
 // Fatalf logs a formatted message in fatal level, then calls os.Exit(1).
 func (l Logger) Fatalf(format string, args ...any) {
-	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	l.incErrorConter(fmt.Errorf(format, args...))
+	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	os.Exit(1)
 }
 
 // Fatalln logs a message in fatal level using fmt.Sprintln to interpret args, then calls os.Exit(1).
 func (l Logger) Fatalln(v ...any) {
 	s := fmt.Sprintln(v...)
-	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	l.incErrorConter(errors.New(s))
+	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	os.Exit(1)
 }
 
 // Panic logs a message in fatal level using fmt.Sprint to interpret args, then calls panic().
 func (l Logger) Panic(v ...any) {
 	s := fmt.Sprint(v...)
-	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	l.incErrorConter(errors.New(s))
+	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	panic(s)
 }
 
 // Panicf logs a formatted message in fatal level, then calls panic().
 func (l Logger) Panicf(format string, args ...any) {
-	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	l.incErrorConter(fmt.Errorf(format, args...))
+	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	panic(fmt.Sprintf(format, args...))
 }
 
 // Panicln logs a message in fatal level using fmt.Sprintln to interpret args, then calls panic().
 func (l Logger) Panicln(v ...any) {
 	s := fmt.Sprintln(v...)
-	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	l.incErrorConter(errors.New(s))
+	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	panic(s)
 }
 
-// Print logs a message without level using fmt.Sprint to interpret args.
+// Print logs a message without level using [fmt.Sprint] to interpret args.
 func (l Logger) Print(v ...any) {
 	if len(v) == 0 {
 		return
 	}
 	l.log(l.l.Log(), fmt.Sprint(v...), nil)
+}
+
+// PrintStack logs a current stack trace.
+func (l Logger) PrintStack(v ...any) {
+	stack := debug.Stack()
+	l.log(l.l.Log(), string(stack), v)
+}
+
+// Log logs a message without level using [fmt.Sprint] to interpret args.
+// It is an alias for [Logger.Print].
+func (l Logger) Log(v ...any) {
+	l.Print(v...)
 }
 
 // Printf logs a formatted message without level.
@@ -322,6 +350,7 @@ func (l Logger) log(ev *zerolog.Event, msg string, fields []any) {
 		}
 	}
 	if len(fields) > 1 {
+		ev = l.setErrorWithStack(ev, fields...)
 		ev = ev.Fields(fields)
 	}
 	ev.Msg(msg)
@@ -335,10 +364,12 @@ func (l Logger) logf(ev *zerolog.Event, msg string, args []any) {
 	}
 	numberOfFormats := strings.Count(msg, "%")
 	if numberOfFormats > 0 && numberOfFormats <= len(args) {
+		ev = l.setErrorWithStack(ev, args...)
 		ev = ev.Fields(args[numberOfFormats:])
 		args = args[:numberOfFormats]
 	}
 	if numberOfFormats == 0 && len(args) > 0 {
+		ev = l.setErrorWithStack(ev, args...)
 		ev = ev.Fields(args)
 		args = nil
 	}
@@ -349,47 +380,34 @@ func (l Logger) logf(ev *zerolog.Event, msg string, args []any) {
 	ev.Msgf(msg, args...)
 }
 
-func (l Logger) setErrorWithStack(err error, ev *zerolog.Event) *zerolog.Event {
-	if l.stackTrace {
-		if errm.Check(err) {
-			ev = ev.Fields(errm.StackForLogger(err))
-		} else {
-			ev = ev.Stack()
-			err = errors.WithStack(err)
+func (l Logger) setErrorWithStack(ev *zerolog.Event, args ...any) *zerolog.Event {
+	for i, a := range args {
+		if err, ok := a.(error); ok {
+			if l.stackTrace {
+				// Hack to use github.com/maxbolgarin/errm without importing it
+				errmErr, ok := err.(interface {
+					StackForLogger() []any
+				})
+				if ok {
+					ev = ev.Fields(errmErr.StackForLogger())
+				} else {
+					ev = ev.Stack()
+					err = errors.WithStack(err)
+				}
+			}
+			l.incErrorConter(err)
+			if i-1 >= 0 {
+				// we update underlying array so args updated in place
+				_ = append(args[:i-1], args[i+1:]...)
+			}
+			return ev.Err(err)
 		}
 	}
-	l.incErrorConter(err)
-	return ev.Err(err)
+	return ev
 }
 
 func (l Logger) incErrorConter(err error) {
 	if l.errCounter != nil {
 		l.errCounter.Inc(err)
 	}
-}
-
-// SLogger is a wrapper for [Logger].
-// It provides the same methods as [Logger] but with another Error interface (slog style).
-type SLogger struct {
-	Logger
-}
-
-// ConvertToS converts [Logger] to [SLogger].
-func ConvertToS(l Logger) SLogger {
-	return SLogger{Logger: l}
-}
-
-// S is a shortcut to [ConvertToS] that converts [Logger] to [SLogger].
-func S(l Logger) SLogger {
-	return SLogger{Logger: l}
-}
-
-// Error logs a message in error level adding provided fields.
-func (l SLogger) Error(msg string, fields ...any) {
-	l.Logger.Error(nil, msg, fields...)
-}
-
-// Errorf logs a formatted message in error level adding provided fields after formatting args.
-func (l SLogger) Errorf(msg string, fields ...any) {
-	l.Logger.Errorf(nil, msg, fields...)
 }

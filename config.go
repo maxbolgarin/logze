@@ -11,27 +11,30 @@ import (
 
 // DefaultDiodeSize is a default size of a diode writer. Logs will be lost if there will be more logs than that value
 // in a small period of time (of time less that Config.DiodePollingInterval).
-const DefaultDiodeSize = 1000
+const (
+	DefaultDiodeSize            = 1000
+	DefaultDiodePollingInterval = 10 * time.Millisecond
+)
 
 // Enumerating string representations of all supported levels.
 const (
-	TraceLevel    = "trace"
-	DebugLevel    = "debug"
-	InfoLevel     = "info"
-	WarnLevel     = "warn"
-	ErrorLevel    = "error"
-	FatalLevel    = "fatal"
-	DisabledLevel = "disabled"
+	LevelTrace    = "trace"
+	LevelDebug    = "debug"
+	LevelInfo     = "info"
+	LevelWarn     = "warn"
+	LevelError    = "error"
+	LevelFatal    = "fatal"
+	LevelDisabled = "disabled"
 )
 
 // Levels is a list of all supported levels in string format.
 var Levels = []string{
-	TraceLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, FatalLevel, DisabledLevel,
+	LevelTrace, LevelDebug, LevelInfo, LevelWarn, LevelError, LevelFatal, LevelDisabled,
 }
 
 // LevelsAny is a list of all supported levels in any format.
 var LevelsAny = []any{
-	TraceLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, FatalLevel, DisabledLevel,
+	LevelTrace, LevelDebug, LevelInfo, LevelWarn, LevelError, LevelFatal, LevelDisabled,
 }
 
 // Config is using for initializing [Logger]. You should use [NewConfig] and With* methods instead of creating
@@ -69,16 +72,20 @@ type Config struct {
 	DiodeSize int
 
 	// DiodePollingInterval is a time after which diode writer will flush its buffer.
-	// Default value is 100ms.
+	// Default value is 10ms.
 	DiodePollingInterval time.Duration
+
+	// UseDiodeWaiter if true, will enable diode waiter istead of poller.
+	// Default value is false.
+	UseDiodeWaiter bool
 
 	// DiodeAlertFunc is a function that will be called when diode writer will flush its buffer.
 	// Default value is a function that logs a message in warn level.
 	DiodeAlertFunc func(int)
 
-	// DisableDiode if true, will disable diode writer.
+	// NoDiode if true, will disable diode writer.
 	// Default value is false.
-	DisableDiode bool
+	NoDiode bool
 
 	// StackTrace if true, will enable stack trace for Error and Errorf methods.
 	// Default value is false.
@@ -149,12 +156,16 @@ func (c Config) WithTimeFieldFormat(format string) Config {
 }
 
 // WithDiodeSize returns [Config] with a new size of diode writer.
+// If there will be more logs than [Config.DiodeSize] in a period of time less that [Config.DiodePollingInterval],
+// then diode writer won't accept new logs.
 func (c Config) WithDiodeSize(size int) Config {
 	c.DiodeSize = size
 	return c
 }
 
 // WithDiodePollingInterval returns [Config] with enabled diode polling with provided interval.
+// Logs will be flushed to a writer every [Config.DiodePollingInterval].
+// Default value is 10ms.
 func (c Config) WithDiodePollingInterval(interval time.Duration) Config {
 	c.DiodePollingInterval = interval
 	return c
@@ -166,9 +177,15 @@ func (c Config) WithDiodeAlert(foo func(int)) Config {
 	return c
 }
 
-// WithDisabledDiode returns [Config] with disabled diode writer.
-func (c Config) WithDisabledDiode() Config {
-	c.DisableDiode = true
+// WithNoDiode returns [Config] with disabled diode writer.
+func (c Config) WithNoDiode() Config {
+	c.NoDiode = true
+	return c
+}
+
+// WithDiodeWaiter returns [Config] with enabled diode waiter.
+func (c Config) WithDiodeWaiter() Config {
+	c.UseDiodeWaiter = true
 	return c
 }
 
@@ -184,9 +201,9 @@ func (c Config) WithErrorCounter(ec ErrorCounter) Config {
 	return c
 }
 
-// WithErrorCounter returns [Config] with a simple [ErrorCounter] inited with the provided name.
-func (c Config) WithSimpleErrorCounter(name string) Config {
-	c.ErrorCounter = newErrorCounter(name)
+// WithErrorCounter returns [Config] with a simple [ErrorCounter].
+func (c Config) WithSimpleErrorCounter() Config {
+	c.ErrorCounter = newSimpleErrorCounter()
 	return c
 }
 
@@ -198,37 +215,22 @@ func getConsoleWriter(w io.Writer, color bool) zerolog.ConsoleWriter {
 	}
 }
 
-// ErrorCounter provides an interface to count logged errors. Use WithSimpleErrorCounter in [Config] creation
-// to use a simple error counter and GetErrorCounter method in [Logger] to retrieve it.
+// ErrorCounter provides an interface to count logged errors. Use [Config.WithSimpleErrorCounter]
+// to use a simple error counter or [Config.WithErrorCounter] to use a custom one.
 type ErrorCounter interface {
-	Inc(err ...error)
+	Inc(err error)
 }
 
-type simpleErrorCounter struct {
-	name  string
-	count atomic.Int64
+// SimpleErrorCounter is a simple implementation of [ErrorCounter] with an atomic counter.
+type SimpleErrorCounter struct {
+	Count atomic.Int64
 }
 
-func newErrorCounter(name string) *simpleErrorCounter {
-	return &simpleErrorCounter{
-		name: name,
-	}
+// Inc increments the counter by 1.
+func (c *SimpleErrorCounter) Inc(error) {
+	c.Count.Add(1)
 }
 
-func (c *simpleErrorCounter) Name() string {
-	return c.name
+func newSimpleErrorCounter() *SimpleErrorCounter {
+	return &SimpleErrorCounter{}
 }
-
-func (c *simpleErrorCounter) Inc(...error) {
-	c.count.Add(1)
-}
-
-func (c *simpleErrorCounter) Get() int64 {
-	return c.count.Load()
-}
-
-type noopErrorCounter struct{}
-
-func (noopErrorCounter) Name() string { return "" }
-func (noopErrorCounter) Inc(...error) {}
-func (noopErrorCounter) Get() int64   { return 0 }
