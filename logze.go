@@ -89,6 +89,15 @@ func New(cfg Config, fields ...any) Logger {
 	}
 }
 
+// NewFromZerolog returns a new [Logger] based on provided [zerolog.Logger].
+func NewFromZerolog(l zerolog.Logger) Logger {
+	return Logger{
+		l:          l,
+		inited:     true,
+		errCounter: noopErrorCounter{},
+	}
+}
+
 // NewDefault returns a new [Logger] with logging to stderr.
 func NewDefault(fields ...any) Logger {
 	return New(NewConfig().WithConsoleJSON(), fields...)
