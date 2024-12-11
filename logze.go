@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/maxbolgarin/errm"
 	"github.com/pkg/errors"
@@ -30,7 +31,7 @@ type Logger struct {
 //
 // For example, if you use [Logger] like that:
 //
-//	lg := New(NewConfig().WithConsoleJSON(), "foo", "bar")
+//	lg := New(C().WithConsoleJSON(), "foo", "bar")
 //	lg.Info("some message", "key", "value")
 //	lg.Error(errors.New("some error"), "cannot handle")
 //
@@ -45,6 +46,11 @@ func New(cfg Config, fields ...any) Logger {
 	if cfg.Level == "" {
 		cfg.Level = InfoLevel
 	}
+	if cfg.TimeFieldFormat == "" {
+		cfg.TimeFieldFormat = time.RFC3339
+	}
+	zerolog.TimeFieldFormat = cfg.TimeFieldFormat
+
 	level, err := zerolog.ParseLevel(cfg.Level)
 	if err != nil {
 		panic("cannot parse level=" + cfg.Level)

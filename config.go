@@ -45,6 +45,12 @@ type Config struct {
 	// trace, debug, info, warn, error, fatal, disabled.
 	Level string
 
+	// TimeFieldFormat is a format for time field. Default value is RFC3339.
+	// You can use values from zerolog like [zerolog.TimeFormatUnix], [zerolog.TimeFormatUnixMs],
+	// [zerolog.TimeFormatUnixMicro], [zerolog.TimeFormatUnixNano], [time.RFC3339], [time.RFC3339Nano] or custom.
+	// UNIX Time is faster and smaller than most timestamps
+	TimeFieldFormat string
+
 	// Hook is a zerolog.Hook that will be used when creating logger.
 	// Default value is nil.
 	Hook zerolog.Hook
@@ -86,6 +92,11 @@ func NewConfig(writers ...io.Writer) Config {
 	}
 }
 
+// C is a shortcut for [NewConfig] that returns [Config] with provided list of [io.Writer], where [Logger] should logs its data.
+func C(writers ...io.Writer) Config {
+	return NewConfig(writers...)
+}
+
 // WithLevel returns [Config] with initialized level (in string format) provided as argument.
 func (c Config) WithLevel(level string) Config {
 	c.Level = level
@@ -124,6 +135,16 @@ func (c Config) WithConsoleJSON() Config {
 // WithToIgnore returns [Config] with a list of messages that will be ignored.
 func (c Config) WithToIgnore(toIgnore ...string) Config {
 	c.ToIgnore = toIgnore
+	return c
+}
+
+// WithTimeFieldFormat returns [Config] with a new format for time field.
+// TimeFieldFormat is a format for time field. Default value is RFC3339.
+// You can use values from zerolog like [zerolog.TimeFormatUnix], [zerolog.TimeFormatUnixMs],
+// [zerolog.TimeFormatUnixMicro], [zerolog.TimeFormatUnixNano], [time.RFC3339], [time.RFC3339Nano] or custom.
+// UNIX Time is faster and smaller than most timestamps
+func (c Config) WithTimeFieldFormat(format string) Config {
+	c.TimeFieldFormat = format
 	return c
 }
 
