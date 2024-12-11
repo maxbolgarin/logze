@@ -6,177 +6,202 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Log is a global logger.
-var Log = NewDefault()
+var log = NewConsoleJSON()
 
-// Init calls [New] function and assigns the result to global [Log] variable.
-// It also calls [SetLoggerForDefault] with this new logger.
-func Init(cfg Config, fields ...any) {
-	Log = New(cfg, fields...)
-	SetLoggerForDefault(Log)
+// Default returns a global logger.
+func Default() Logger {
+	return log
 }
 
-// Update calls [Logger.Update] method for global [Log].
+// SetDefault sets provided [Logger] as a global logger.
+func SetDefault(l Logger) {
+	log = l
+}
+
+// Init calls [New] function and assigns the result to global [log] variable.
+// It also calls [SetLoggerForDefault] with this new logger.
+func Init(cfg Config, fields ...any) {
+	log = New(cfg, fields...)
+	SetStdLogger(log)
+}
+
+// Update calls [Logger.Update] method for global [log].
 // It also calls [SetLoggerForDefault] with this new logger.
 // It is not safe for concurrent use!
 func Update(cfg Config, fields ...any) {
-	Log.Update(cfg, fields...)
-	SetLoggerForDefault(Log)
+	log.Update(cfg, fields...)
+	SetStdLogger(log)
 }
 
 // SetLoggerForDefault sets priovded [Logger] with (key, value) pairs as writer for default Go logger and also
 // calls stdlog.SetFlags(0).
-func SetLoggerForDefault(l Logger, fields ...any) {
+func SetStdLogger(l Logger, fields ...any) {
 	stdlog.SetFlags(0)
 	stdlog.SetOutput(l.WithFields(fields...))
+	log = l
 }
 
 // WithFields returns [Logger] with applied fields, provided as (key, value) pairs, based on a global logger.
 func WithFields(fields ...any) Logger {
-	return Log.WithFields(fields...)
+	return log.WithFields(fields...)
 }
 
 // With is a shortcut for [WithFields].
 func With(fields ...any) Logger {
-	return Log.With(fields...)
+	return log.With(fields...)
 }
 
 // WithLevel returns [Logger] with applied log level, based on a global logger.
 func WithLevel(level string) Logger {
-	return Log.WithLevel(level)
+	return log.WithLevel(level)
 }
 
 // WithErrorCounter returns [Logger] with the provided [ErrorCounter], based on a global logger.
 func WithErrorCounter(ec ErrorCounter) Logger {
-	return Log.WithErrorCounter(ec)
+	return log.WithErrorCounter(ec)
 }
 
-// WithSimpleErrorCounter returns [Logger] with a simple [ErrorCounter] inited with the provided name,
+// WithSimpleErrorCounter returns [Logger] with a simple [ErrorCounter],
 // based on a global logger.
-func WithSimpleErrorCounter(name string) Logger {
-	return Log.WithSimpleErrorCounter(name)
+func WithSimpleErrorCounter() Logger {
+	return log.WithSimpleErrorCounter()
 }
 
 // WithToIgnore returns [Logger] with the provided list of messages to ignore based on a global logger.
 func WithToIgnore(toIgnore ...string) Logger {
-	Log.toIgnore = toIgnore
-	return Log
+	log.toIgnore = toIgnore
+	return log
 }
 
 // Trace logs a message in trace level adding provided fields and information about method caller
 // using a global logger.
 func Trace(msg string, fields ...any) {
-	Log.log(Log.l.Trace().Caller(1), msg, fields)
+	log.log(log.l.Trace().Caller(1), msg, fields)
 }
 
 // Tracef logs a formatted message in trace level adding provided fields after formatting args
 // and information about method caller using a global logger.
 func Tracef(msg string, args ...any) {
-	Log.logf(Log.l.Trace().Caller(1), msg, args)
+	log.logf(log.l.Trace().Caller(1), msg, args)
 }
 
 // Debug logs a message in debug level adding provided fields using a global logger.
 func Debug(msg string, fields ...any) {
-	Log.Debug(msg, fields...)
+	log.Debug(msg, fields...)
 }
 
 // Debugf logs a formatted message in debug level adding provided fields after formatting args using a global logger.
 func Debugf(msg string, args ...any) {
-	Log.Debugf(msg, args...)
+	log.Debugf(msg, args...)
 }
 
 // Info logs a message in info level adding provided fields using a global logger.
 func Info(msg string, fields ...any) {
-	Log.Info(msg, fields...)
+	log.Info(msg, fields...)
 }
 
 // Infof logs a formatted message in info level adding provided fields after formatting args using a global logger.
 func Infof(msg string, args ...any) {
-	Log.Infof(msg, args...)
+	log.Infof(msg, args...)
 }
 
 // Warn logs a message in warning level adding provided fields using a global logger.
 func Warn(msg string, fields ...any) {
-	Log.Warn(msg, fields...)
+	log.Warn(msg, fields...)
 }
 
 // Warnf logs a formatted message in warn level adding provided fields after formatting args using a global logger.
 func Warnf(msg string, args ...any) {
-	Log.Warnf(msg, args...)
+	log.Warnf(msg, args...)
 }
 
 // Err logs a provided error in error level adding provided fields using a global logger.
-func Err(err error, fields ...any) {
-	Log.Err(err, fields...)
+func Err(err error, msg string, fields ...any) {
+	log.Err(err, msg, fields...)
 }
 
-// Error logs a provided error and message in error level adding provided fields using a global logger.
-func Error(err error, msg string, fields ...any) {
-	Log.Error(err, msg, fields...)
+// Error logs a message in error level adding provided fields using a global logger.
+func Error(msg string, fields ...any) {
+	log.Error(msg, fields...)
 }
 
-// Errorf logs a provided error and formatted message in error level adding provided fields after formatting args
-// using a global logger.
-func Errorf(err error, msg string, args ...any) {
-	Log.Errorf(err, msg, args...)
+// Errorf logs a formatted message in error level adding provided fields after formatting args using a global logger.
+func Errorf(msg string, args ...any) {
+	log.Errorf(msg, args...)
+}
+
+// ErrStack logs a stack trace of provided error as message in error level adding fields.
+func ErrStack(err error, fields ...any) {
+	log.ErrStack(err, fields...)
 }
 
 // Fatal logs a message in fatal level using fmt.Sprint to interpret args sing a global logger, then calls os.Exit(1).
 func Fatal(v ...any) {
-	Log.Fatal(v...)
+	log.Fatal(v...)
 }
 
 // Fatalf logs a formatted message in fatal level using a global logger, then calls os.Exit(1).
 func Fatalf(format string, args ...any) {
-	Log.Fatalf(format, args...)
+	log.Fatalf(format, args...)
 }
 
 // Fatalln logs a message in fatal level using fmt.Sprintln to interpret args using a global logger, then calls os.Exit(1).
 func Fatalln(v ...any) {
-	Log.Fatalln(v...)
+	log.Fatalln(v...)
 }
 
 // Panic logs a message in fatal level using fmt.Sprint to interpret args using a global logger, then calls panic().
 func Panic(v ...any) {
-	Log.Panic(v...)
+	log.Panic(v...)
 }
 
 // Panicf logs a formatted message in fatal level using a global logger, then calls panic().
 func Panicf(format string, args ...any) {
-	Log.Panicf(format, args...)
+	log.Panicf(format, args...)
 }
 
 // Panicln logs a message in fatal level using fmt.Sprintln to interpret args using a global logger, then calls panic().
 func Panicln(v ...any) {
-	Log.Panicln(v...)
+	log.Panicln(v...)
 }
 
-// Print logs a message without level using fmt.Sprint to interpret args using a global logger.
+// Print logs a message without level using [fmt.Sprint] to interpret args using a global logger.
 func Print(v ...any) {
-	Log.Print(v...)
+	log.Print(v...)
+}
+
+// PrintStack logs a current stack trace.
+func PrintStack(v ...any) {
+	log.PrintStack(v...)
+}
+
+// Log logs a message without level using [fmt.Sprint] to interpret args using a global logger.
+// It is an alias for [Print].
+func Log(v ...any) {
+	log.Log(v...)
 }
 
 // Printf logs a formatted message without level using a global logger.
 func Printf(format string, args ...any) {
-	Log.Printf(format, args...)
+	log.Printf(format, args...)
 }
 
 // Println writes a message without level using fmt.Sprintln to interpret args using a global logger.
 func Println(v ...any) {
-	Log.Println(v...)
+	log.Println(v...)
 }
 
 // Write writes bytes to underlying [io.Writer] using a global logger.
 func Write(p []byte) (n int, err error) {
-	return Log.Write(p)
+	return log.Write(p)
 }
 
 // Raw returns Logger's underlying [zerolog.Logger] from global logger.
 func Raw() *zerolog.Logger {
-	return Log.Raw()
+	return log.Raw()
 }
 
 // GetErrorCounter returns Logger's underlying [ErrorCounter] from global logger.
 func GetErrorCounter() ErrorCounter {
-	return Log.GetErrorCounter()
+	return log.GetErrorCounter()
 }
