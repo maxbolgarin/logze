@@ -57,6 +57,12 @@ func WithSimpleErrorCounter(name string) Logger {
 	return Log.WithSimpleErrorCounter(name)
 }
 
+// WithToIgnore returns [Logger] with the provided list of messages to ignore based on a global logger.
+func WithToIgnore(toIgnore ...string) Logger {
+	Log.toIgnore = toIgnore
+	return Log
+}
+
 // Trace logs a message in trace level adding provided fields and information about method caller
 // using a global logger.
 func Trace(msg string, fields ...any) {
