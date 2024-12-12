@@ -231,6 +231,11 @@ func (l Logger) Err(err error, msg string, fields ...any) {
 	l.log(l.setErrorWithStack(l.l.Error(), err), msg, fields)
 }
 
+// Errf logs a formatted message in error level adding provided fields after formatting args.
+func (l Logger) Errf(err error, msg string, args ...any) {
+	l.logf(l.setErrorWithStack(l.l.Error(), err), msg, args)
+}
+
 // Error logs a message in error level adding provided fields.
 func (l Logger) Error(msg string, fields ...any) {
 	l.log(l.l.Error(), msg, fields)

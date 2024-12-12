@@ -181,10 +181,10 @@ func TestLoggerInfof(t *testing.T) {
 	cfg := logze.NewConfig(&b).WithLevel(logze.InfoLevel).WithNoDiode()
 	logger := logze.New(cfg)
 
-	logger.Infof("test message %d", 42)
+	logger.Infof("test message %d", 42, "a", "b")
 
 	output := b.String()
-	if !strings.Contains(output, "level\":\"info") || !strings.Contains(output, "test message 42") {
+	if !strings.Contains(output, "level\":\"info") || !strings.Contains(output, "test message 42") || !strings.Contains(output, "\"a\":\"b\"") {
 		t.Errorf("expected formatted info message, got %s", output)
 	}
 }
@@ -199,6 +199,19 @@ func TestLoggerDebugf(t *testing.T) {
 	output := b.String()
 	if !strings.Contains(output, "level\":\"debug") || !strings.Contains(output, "debug value: 100") {
 		t.Errorf("expected formatted debug message, got %s", output)
+	}
+}
+
+func TestLoggerErrf(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.ErrorLevel).WithNoDiode()
+	logger := logze.New(cfg)
+
+	logger.Errf(errors.New("123"), "error operation %s", "failed", "a", "b")
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"error") || !strings.Contains(output, "error operation failed") || !strings.Contains(output, "123") || !strings.Contains(output, "\"a\":\"b\"") {
+		t.Errorf("expected formatted error message, got %s", output)
 	}
 }
 
