@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maxbolgarin/logze"
+	"github.com/maxbolgarin/logze/v2"
 	"github.com/rs/zerolog"
 )
 

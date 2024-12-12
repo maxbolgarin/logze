@@ -1,4 +1,4 @@
-module github.com/maxbolgarin/logze
+module github.com/maxbolgarin/logze/v2
 
 go 1.19
 
