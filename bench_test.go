@@ -28,7 +28,7 @@ func setupSLogger(buffer *bytes.Buffer) *slog.Logger {
 	return slog.New(h)
 }
 
-// Info tests
+// Info
 
 func BenchmarkZerologInfo(b *testing.B) {
 	var buffer bytes.Buffer
@@ -160,6 +160,41 @@ func BenchmarkSLogErrorWithStack(b *testing.B) {
 		buffer.Reset()
 		stack := debug.Stack()
 		logger.Error("error message", "error", err, "key", "value", "number", 123, "stack", string(stack))
+	}
+}
+
+// Info console
+
+func BenchmarkZerologInfoConsole(b *testing.B) {
+	var buffer bytes.Buffer
+	logger := zerolog.New(zerolog.ConsoleWriter{Out: &buffer}).With().Timestamp().Logger().Level(zerolog.DebugLevel)
+
+	for i := 0; i < b.N; i++ {
+		buffer.Reset()
+		logger.Info().Str("key", "value").Int("number", 123).Msg("error message")
+	}
+}
+
+func BenchmarkLogzeInfoConsole(b *testing.B) {
+	var buffer bytes.Buffer
+	logger := logze.New(logze.C(zerolog.ConsoleWriter{Out: &buffer}).WithLevel(logze.DebugLevel).WithNoDiode())
+
+	for i := 0; i < b.N; i++ {
+		buffer.Reset()
+		logger.Info("error message", "key", "value", "number", 123)
+	}
+}
+
+func BenchmarkSLogInfoConsole(b *testing.B) {
+	var buffer bytes.Buffer
+	h := slog.NewTextHandler(&buffer, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	logger := slog.New(h)
+
+	for i := 0; i < b.N; i++ {
+		buffer.Reset()
+		logger.Info("error message", "key", "value", "number", 123)
 	}
 }
 

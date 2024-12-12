@@ -17,6 +17,7 @@
   - [Configuration Options](#configuration-options)
 - [Pros and Cons](#pros-and-cons)
 - [Using Diode](#using-diode)
+- [Benchmarks](#benchmarks)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -184,6 +185,70 @@ To disable diode buffering:
 config := logze.NewConfig().WithNoDiode()
 logger := logze.New(config)
 ```
+
+## Benchmarks
+
+Thoughts from benchmarks:
+* `logze` is about 3 times faster than `slog` and for 15% slower than `zerolog`
+* format methods like `logze.Infof` or `Msgf` doesn't add big overhead (only 30% slower and +1 alloc)
+* stack trace is very slow in `logze` and `zerolog`
+* console writer is very slow in `logze` and `zerolog` and should be used only in development (that the case when slog wins over `logze` - if you want to use text writer in production)
+* `logze.Err` is slightly faster that `logze.Error`
+
+
+Here is result of `go test -bench=. -benchmem -benchtime=2s`:
+
+```
+goos: darwin
+goarch: arm64
+cpu: Apple M1 Pro
+```
+
+Logging `Info` and two fields:
+```text
+BenchmarkZerologInfo-8                  14365629               151.3 ns/op             0 B/op          0 allocs/op
+BenchmarkLogzeInfo-8                    13851320               171.5 ns/op             0 B/op          0 allocs/op
+BenchmarkSLogInfo-8                      4491897               533.2 ns/op             0 B/op          0 allocs/op
+```
+
+Logging `Infof` (formatted) and two fields:
+```text
+BenchmarkZerologInfoFormat-8            11758495               207.0 ns/op            24 B/op          1 allocs/op
+BenchmarkLogzeInfoFormat-8              10047972               239.8 ns/op            24 B/op          1 allocs/op
+BenchmarkSLogInfoFormat-8                4026775               601.0 ns/op            24 B/op          1 allocs/op
+```
+
+
+Logging `Error` with error and two fields:
+```text
+BenchmarkZerologError-8                 13900646               173.6 ns/op             0 B/op          0 allocs/op
+BenchmarkLogzeError-8                   10827030               221.7 ns/op             0 B/op          0 allocs/op
+BenchmarkSLogError-8                     3757587               635.7 ns/op             0 B/op          0 allocs/op
+```
+
+
+Logging `Error` with error, stack trace and two fields:
+```text
+BenchmarkZerologErrorWithStack-8          545072               4379 ns/op            3298 B/op         73 allocs/op
+BenchmarkLogzeErrorWithStack-8            291956               8065 ns/op            5460 B/op         121 allocs/op
+BenchmarkSLogErrorWithStack-8             612562               3922 ns/op            1617 B/op         3 allocs/op
+```
+
+
+Logging `Info` and two fields using text handler for console / development:
+```text
+BenchmarkZerologInfoConsole-8             682558               3306 ns/op            1922 B/op         51 allocs/op
+BenchmarkLogzeInfoConsole-8               704247               3366 ns/op            1922 B/op         51 allocs/op
+BenchmarkSLogInfoConsole-8               4058850               588.1 ns/op             0 B/op          0 allocs/op
+```
+
+
+Additional `logze` features
+```text
+BenchmarkLogzeErr-8                     11857878               200.9 ns/op             0 B/op          0 allocs/op
+BenchmarkLogzeToIgnore5-8               10040202               238.5 ns/op             0 B/op          0 allocs/op
+```
+
 
 
 ## Contributing
