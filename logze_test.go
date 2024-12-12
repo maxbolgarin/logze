@@ -181,10 +181,10 @@ func TestLoggerInfof(t *testing.T) {
 	cfg := logze.NewConfig(&b).WithLevel(logze.LevelInfo).WithNoDiode()
 	logger := logze.New(cfg)
 
-	logger.Infof("test message %d", 42)
+	logger.Infof("test message %d", 42, "a", "b")
 
 	output := b.String()
-	if !strings.Contains(output, "level\":\"info") || !strings.Contains(output, "test message 42") {
+	if !strings.Contains(output, "level\":\"info") || !strings.Contains(output, "test message 42") || !strings.Contains(output, "\"a\":\"b\"") {
 		t.Errorf("expected formatted info message, got %s", output)
 	}
 }
