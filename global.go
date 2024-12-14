@@ -8,9 +8,14 @@ import (
 
 var log = NewConsoleJSON()
 
-// Default returns a global logger.
+// Default returns a copy on a global logger.
 func Default() Logger {
 	return log
+}
+
+// DefaultPtr returns a pointer to a global logger.
+func DefaultPtr() *Logger {
+	return &log
 }
 
 // SetDefault sets provided [Logger] as a global logger.

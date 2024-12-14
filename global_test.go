@@ -15,6 +15,29 @@ func setupGlobalLogger(buffer *bytes.Buffer, level string) {
 	logze.Init(cfg)
 }
 
+func TestGlobalDefaultPtr(t *testing.T) {
+	var b bytes.Buffer
+	logze.Init(logze.NewConfig(&b).WithNoDiode())
+
+	log1 := logze.DefaultPtr()
+	log1.Info("test message")
+
+	output := b.String()
+	if !strings.Contains(output, "test message") {
+		t.Errorf("expected %s, got %s", "test message", output)
+	}
+
+	var b2 bytes.Buffer
+	logze.Init(logze.NewConfig(&b2).WithNoDiode())
+
+	log1.Info("test message")
+
+	output = b2.String()
+	if !strings.Contains(output, "test message") {
+		t.Errorf("expected %s, got %s", "test message", output)
+	}
+}
+
 func TestGlobalInfo(t *testing.T) {
 	var b bytes.Buffer
 	setupGlobalLogger(&b, logze.LevelDebug)
