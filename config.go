@@ -119,6 +119,48 @@ func (c Config) WithLevel(level string) Config {
 	return c
 }
 
+// WithTrace returns [Config] with trace level.
+func (c Config) WithTrace() Config {
+	c.Level = LevelTrace
+	return c
+}
+
+// WithDebug returns [Config] with debug level.
+func (c Config) WithDebug() Config {
+	c.Level = LevelDebug
+	return c
+}
+
+// WithInfo returns [Config] with info level.
+func (c Config) WithInfo() Config {
+	c.Level = LevelInfo
+	return c
+}
+
+// WithWarn returns [Config] with warn level.
+func (c Config) WithWarn() Config {
+	c.Level = LevelWarn
+	return c
+}
+
+// WithError returns [Config] with error level.
+func (c Config) WithError() Config {
+	c.Level = LevelError
+	return c
+}
+
+// WithFatal returns [Config] with fatal level.
+func (c Config) WithFatal() Config {
+	c.Level = LevelFatal
+	return c
+}
+
+// WithDisabled returns [Config] with disabled level.
+func (c Config) WithDisabled() Config {
+	c.Level = LevelDisabled
+	return c
+}
+
 // WithHook returns [Config] with initialized [zerolog.Hook] provided as argument.
 func (c Config) WithHook(hook zerolog.Hook) Config {
 	c.Hook = hook

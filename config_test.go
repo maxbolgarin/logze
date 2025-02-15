@@ -48,6 +48,60 @@ func TestWithLevel(t *testing.T) {
 	}
 }
 
+func TestWithLevelMethods(t *testing.T) {
+	tests := []struct {
+		name     string
+		method   func(logze.Config) logze.Config
+		expected string
+	}{
+		{
+			name:     "WithTrace",
+			method:   logze.Config.WithTrace,
+			expected: logze.LevelTrace,
+		},
+		{
+			name:     "WithDebug",
+			method:   logze.Config.WithDebug,
+			expected: logze.LevelDebug,
+		},
+		{
+			name:     "WithInfo",
+			method:   logze.Config.WithInfo,
+			expected: logze.LevelInfo,
+		},
+		{
+			name:     "WithWarn",
+			method:   logze.Config.WithWarn,
+			expected: logze.LevelWarn,
+		},
+		{
+			name:     "WithError",
+			method:   logze.Config.WithError,
+			expected: logze.LevelError,
+		},
+		{
+			name:     "WithFatal",
+			method:   logze.Config.WithFatal,
+			expected: logze.LevelFatal,
+		},
+		{
+			name:     "WithDisabled",
+			method:   logze.Config.WithDisabled,
+			expected: logze.LevelDisabled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := logze.NewConfig()
+			cfg = tt.method(cfg)
+			if cfg.Level != tt.expected {
+				t.Errorf("expected level %s, got %s", tt.expected, cfg.Level)
+			}
+		})
+	}
+}
+
 func TestWithHook(t *testing.T) {
 	var testHook zerolog.Hook
 	cfg := logze.NewConfig().WithHook(testHook)
