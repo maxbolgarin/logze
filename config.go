@@ -113,6 +113,16 @@ func C(writers ...io.Writer) Config {
 	return NewConfig(writers...)
 }
 
+// New returns [Logger] with provided fields based on a [Config] from receiver.
+func (c Config) New(fields ...any) Logger {
+	return New(c, fields...)
+}
+
+// Logger returns [Logger] with provided fields based on a [Config] from receiver.
+func (c Config) Logger(fields ...any) Logger {
+	return c.New(fields...)
+}
+
 // WithLevel returns [Config] with initialized level (in string format) provided as argument.
 func (c Config) WithLevel(level string) Config {
 	c.Level = level
