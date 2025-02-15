@@ -86,7 +86,11 @@ func New(cfg Config, fields ...any) Logger {
 		output = diode.NewWriter(output, cfg.DiodeSize, cfg.DiodePollingInterval, cfg.DiodeAlertFunc)
 	}
 
-	l := zerolog.New(output).With().Timestamp().Fields(fields).Logger().Level(level)
+	temp := zerolog.New(output).With().Timestamp().Fields(fields)
+	if cfg.AddCaller {
+		temp = temp.CallerWithSkipFrameCount(cfg.CallerSkipFrameCount)
+	}
+	l := temp.Logger().Level(level)
 
 	if cfg.Hook != nil {
 		l = l.Hook(cfg.Hook)
@@ -182,6 +186,18 @@ func (l Logger) WithSimpleErrorCounter() Logger {
 // WithToIgnore returns [Logger] with the provided list of messages to ignore.
 func (l Logger) WithToIgnore(toIgnore ...string) Logger {
 	l.toIgnore = toIgnore
+	return l
+}
+
+// WithCaller returns [Logger] with the provided caller skip frame count.
+func (l Logger) WithCaller(callerSkipFrameCount int) Logger {
+	l.l = l.l.With().CallerWithSkipFrameCount(callerSkipFrameCount).Logger()
+	return l
+}
+
+// WithDefaultCaller returns [Logger] with the default caller skip frame count.
+func (l Logger) WithDefaultCaller() Logger {
+	l.l = l.l.With().CallerWithSkipFrameCount(DefaultCallerSkipFrameCount).Logger()
 	return l
 }
 

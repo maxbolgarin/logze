@@ -14,6 +14,7 @@ import (
 const (
 	DefaultDiodeSize            = 1000
 	DefaultDiodePollingInterval = 10 * time.Millisecond
+	DefaultCallerSkipFrameCount = 5
 )
 
 // Enumerating string representations of all supported levels.
@@ -75,13 +76,13 @@ type Config struct {
 	// Default value is 10ms.
 	DiodePollingInterval time.Duration
 
-	// UseDiodeWaiter if true, will enable diode waiter istead of poller.
-	// Default value is false.
-	UseDiodeWaiter bool
-
 	// DiodeAlertFunc is a function that will be called when diode writer will flush its buffer.
 	// Default value is a function that logs a message in warn level.
 	DiodeAlertFunc func(int)
+
+	// UseDiodeWaiter if true, will enable diode waiter istead of poller.
+	// Default value is false.
+	UseDiodeWaiter bool
 
 	// NoDiode if true, will disable diode writer.
 	// Default value is false.
@@ -90,6 +91,14 @@ type Config struct {
 	// StackTrace if true, will enable stack trace for Error and Errorf methods.
 	// Default value is false.
 	StackTrace bool
+
+	// AddCaller if true, will add caller information to the log.
+	// Default value is false.
+	AddCaller bool
+
+	// CallerSkipFrameCount is a number of frames to skip to get the caller information.
+	// Default value is 5.
+	CallerSkipFrameCount int
 }
 
 // NewConfig returns [Config] with provided list of [io.Writer], where [Logger] should logs its data.
@@ -204,6 +213,20 @@ func (c Config) WithErrorCounter(ec ErrorCounter) Config {
 // WithErrorCounter returns [Config] with a simple [ErrorCounter].
 func (c Config) WithSimpleErrorCounter() Config {
 	c.ErrorCounter = newSimpleErrorCounter()
+	return c
+}
+
+// WithAddCaller returns [Config] with an enabled caller information.
+func (c Config) WithAddCaller() Config {
+	c.AddCaller = true
+	c.CallerSkipFrameCount = DefaultCallerSkipFrameCount
+	return c
+}
+
+// WithCallerSkipFrameCount returns [Config] with a new caller skip frame count.
+func (c Config) WithCallerSkipFrameCount(count int) Config {
+	c.AddCaller = true
+	c.CallerSkipFrameCount = count
 	return c
 }
 

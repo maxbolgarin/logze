@@ -187,3 +187,20 @@ func TestWithSimpleErrorCounter(t *testing.T) {
 		t.Error("expected a non-nil ErrorCounter")
 	}
 }
+
+func TestWithAddCaller(t *testing.T) {
+	cfg := logze.NewConfig().WithAddCaller()
+
+	if !cfg.AddCaller {
+		t.Errorf("expected AddCaller to be true, got false")
+	}
+}
+
+func TestWithCallerSkipFrameCount(t *testing.T) {
+	count := 10
+	cfg := logze.NewConfig().WithCallerSkipFrameCount(count)
+
+	if cfg.CallerSkipFrameCount != count {
+		t.Errorf("expected CallerSkipFrameCount to be %d, got %d", count, cfg.CallerSkipFrameCount)
+	}
+}
