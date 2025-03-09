@@ -183,6 +183,22 @@ func (c Config) WithWriter(w io.Writer) Config {
 	return c
 }
 
+// WithFile returns [Config] with a configurated output to a file.
+// It also returns a closer for a file and an error if it occurs.
+// You can provide a permission for a file as an argument.
+// Default permission is 0644.
+func (c Config) WithFile(filename string, perm ...os.FileMode) (Config, io.Closer, error) {
+	if len(perm) == 0 {
+		perm = []os.FileMode{0644}
+	}
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, perm[0])
+	if err != nil {
+		return c, nil, err
+	}
+	c.Writers = append(c.Writers, f)
+	return c, f, nil
+}
+
 // WithConsole returns [Config] with a configurated output to stderr in a pretty console format with colors.
 // This format may significantly slow down logging in an application compared to a default JSON format.
 func (c Config) WithConsole() Config {
