@@ -125,6 +125,58 @@ func TestWithWriter(t *testing.T) {
 	}
 }
 
+func TestWithFile(t *testing.T) {
+	// Create a temporary file for testing
+	tempFile, err := os.CreateTemp("", "logze_test_*.log")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	tempFileName := tempFile.Name()
+	tempFile.Close()
+
+	// Clean up after the test
+	defer os.Remove(tempFileName)
+
+	// Test with default permissions
+	cfg := logze.NewConfig()
+	cfg, closer, err := cfg.WithFile(tempFileName)
+	if err != nil {
+		t.Errorf("expected no error with default permissions, got %v", err)
+	}
+	if closer == nil {
+		t.Error("expected closer to not be nil")
+	}
+	defer closer.Close()
+
+	if len(cfg.Writers) != 1 {
+		t.Errorf("expected 1 writer, got %d", len(cfg.Writers))
+	}
+
+	// Test with custom permissions
+	cfg = logze.NewConfig()
+	cfg, closer, err = cfg.WithFile(tempFileName, 0600)
+	if err != nil {
+		t.Errorf("expected no error with custom permissions, got %v", err)
+	}
+	if closer == nil {
+		t.Error("expected closer to not be nil")
+	}
+	defer closer.Close()
+
+	if len(cfg.Writers) != 1 {
+		t.Errorf("expected 1 writer, got %d", len(cfg.Writers))
+	}
+
+	info, err := os.Stat(tempFileName)
+	if err != nil {
+		t.Errorf("expected no error with custom permissions, got %v", err)
+	}
+
+	if info.Mode() != 0600 {
+		t.Errorf("expected file mode 0600, got %v", info.Mode())
+	}
+}
+
 func TestWithConsole(t *testing.T) {
 	cfg := logze.NewConfig().WithConsole()
 
