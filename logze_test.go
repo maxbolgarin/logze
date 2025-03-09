@@ -133,9 +133,19 @@ func TestLoggerWarn(t *testing.T) {
 	}
 }
 
+type errCounter struct {
+	count int
+}
+
+func (e *errCounter) Inc(err error) {
+	e.count++
+}
+
 func TestLoggerError(t *testing.T) {
 	var b bytes.Buffer
-	cfg := logze.NewConfig(&b).WithLevel(logze.LevelError).WithNoDiode()
+	var ec errCounter
+
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelError).WithNoDiode().WithErrorCounter(&ec)
 	logger := logze.New(cfg)
 
 	logger.Error("error message")
@@ -146,6 +156,24 @@ func TestLoggerError(t *testing.T) {
 	}
 	if !strings.Contains(output, "error message") {
 		t.Errorf("expected log message 'error message', got %s", output)
+	}
+
+	if ec.count != 0 {
+		t.Errorf("expected 0, got %d", ec.count)
+	}
+
+	b.Reset()
+	logger.Error("error message", errors.New("abc"))
+
+	if ec.count != 1 {
+		t.Errorf("expected 1, got %d", ec.count)
+	}
+
+	b.Reset()
+	logger.Errorf("error message %s %w", "err", errors.New("abc"), "a", "b")
+
+	if ec.count != 2 {
+		t.Errorf("expected 2, got %d", ec.count)
 	}
 }
 

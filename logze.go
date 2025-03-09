@@ -244,12 +244,14 @@ func (l Logger) Warnf(msg string, args ...any) {
 
 // Err logs a provided error in error level adding provided fields.
 func (l Logger) Err(err error, msg string, fields ...any) {
-	l.log(l.setErrorWithStack(l.l.Error(), err), msg, fields)
+	ev, _ := l.setErrorWithStack(l.l.Error(), false, err)
+	l.log(ev, msg, fields)
 }
 
 // Errf logs a formatted message in error level adding provided fields after formatting args.
 func (l Logger) Errf(err error, msg string, args ...any) {
-	l.logf(l.setErrorWithStack(l.l.Error(), err), msg, args)
+	ev, _ := l.setErrorWithStack(l.l.Error(), false, err)
+	l.logf(ev, msg, args)
 }
 
 // Error logs a message in error level adding provided fields.
@@ -370,8 +372,8 @@ func (l Logger) log(ev *zerolog.Event, msg string, fields []any) {
 			return
 		}
 	}
-	if len(fields) > 1 {
-		ev = l.setErrorWithStack(ev, fields...)
+	if len(fields) > 0 {
+		ev, fields = l.setErrorWithStack(ev, false, fields...)
 		ev = ev.Fields(fields)
 	}
 	ev.Msg(msg)
@@ -385,12 +387,13 @@ func (l Logger) logf(ev *zerolog.Event, msg string, args []any) {
 	}
 	numberOfFormats := strings.Count(msg, "%")
 	if numberOfFormats > 0 && numberOfFormats <= len(args) {
-		ev = l.setErrorWithStack(ev, args...)
+		ev, args = l.setErrorWithStack(ev, true, args...)
 		ev = ev.Fields(args[numberOfFormats:])
 		args = args[:numberOfFormats]
+		msg = strings.Replace(msg, "%w", "%s", numberOfFormats)
 	}
 	if numberOfFormats == 0 && len(args) > 0 {
-		ev = l.setErrorWithStack(ev, args...)
+		ev, args = l.setErrorWithStack(ev, false, args...)
 		ev = ev.Fields(args)
 		args = nil
 	}
@@ -401,7 +404,8 @@ func (l Logger) logf(ev *zerolog.Event, msg string, args []any) {
 	ev.Msgf(msg, args...)
 }
 
-func (l Logger) setErrorWithStack(ev *zerolog.Event, args ...any) *zerolog.Event {
+func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...any) (*zerolog.Event, []any) {
+	newFields := args
 	for i, a := range args {
 		if err, ok := a.(error); ok {
 			if l.stackTrace {
@@ -417,14 +421,18 @@ func (l Logger) setErrorWithStack(ev *zerolog.Event, args ...any) *zerolog.Event
 				}
 			}
 			l.incErrorConter(err)
-			if i-1 >= 0 {
-				// we update underlying array so args updated in place
-				_ = append(args[:i-1], args[i+1:]...)
+			if !inFormat {
+				if i-1 >= 0 {
+					newFields = append(args[:i-1], args[i+1:]...)
+				}
+				if i == 0 {
+					newFields = args[1:]
+				}
 			}
-			return ev.Err(err)
+			return ev.Err(err), newFields
 		}
 	}
-	return ev
+	return ev, newFields
 }
 
 func (l Logger) incErrorConter(err error) {
