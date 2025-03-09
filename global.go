@@ -13,8 +13,18 @@ func Default() Logger {
 	return log
 }
 
+// D is a shortcut for [Default].
+func D() Logger {
+	return log
+}
+
 // DefaultPtr returns a pointer to a global logger.
 func DefaultPtr() *Logger {
+	return &log
+}
+
+// DP is a shortcut for [DefaultPtr].
+func DP() *Logger {
 	return &log
 }
 
@@ -86,6 +96,11 @@ func WithCaller(callerSkipFrameCount int) Logger {
 // WithDefaultCaller returns [Logger] with the default caller skip frame count based on a global logger.
 func WithDefaultCaller() Logger {
 	return log.WithDefaultCaller()
+}
+
+// GetErrorCounter returns Logger's underlying [ErrorCounter] from global logger.
+func GetErrorCounter() ErrorCounter {
+	return log.GetErrorCounter()
 }
 
 // Trace logs a message in trace level adding provided fields and information about method caller
@@ -214,9 +229,4 @@ func Write(p []byte) (n int, err error) {
 // Raw returns Logger's underlying [zerolog.Logger] from global logger.
 func Raw() *zerolog.Logger {
 	return log.Raw()
-}
-
-// GetErrorCounter returns Logger's underlying [ErrorCounter] from global logger.
-func GetErrorCounter() ErrorCounter {
-	return log.GetErrorCounter()
 }
