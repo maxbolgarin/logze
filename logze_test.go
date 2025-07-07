@@ -452,6 +452,14 @@ func TestLoggerWithStack(t *testing.T) {
 	if !strings.Contains(output, "TestLoggerWithStack") {
 		t.Errorf("expected stack trace in output, got %s", output)
 	}
+
+	b.Reset()
+	logger.WithStack(false).Err(err, "error without stack")
+
+	output = b.String()
+	if strings.Contains(output, "TestLoggerWithStack") {
+		t.Errorf("expected no stack trace in output, got %s", output)
+	}
 }
 
 func TestLoggerWithSimpleErrorCounter(t *testing.T) {
