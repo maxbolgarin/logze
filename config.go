@@ -312,6 +312,12 @@ func (c Config) WithCallerSkipFrameCount(count int) Config {
 	return c
 }
 
+// WithSampler returns [Config] with a new [zerolog.Sampler].
+func (c Config) WithSampler(sampler zerolog.Sampler) Config {
+	c.Sampler = sampler
+	return c
+}
+
 // WithPercentageSampler returns [Config] with a new percentage sampler.
 // Percentage is a float64 percentage of logs that will be sampled from 0 to 1.
 // Levels is an optional list of levels that will be sampled. If no levels are provided,
