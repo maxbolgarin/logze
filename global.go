@@ -84,8 +84,7 @@ func WithSimpleErrorCounter() Logger {
 
 // WithToIgnore returns [Logger] with the provided list of messages to ignore based on a global logger.
 func WithToIgnore(toIgnore ...string) Logger {
-	log.toIgnore = toIgnore
-	return log
+	return log.WithToIgnore(toIgnore...)
 }
 
 // WithCaller returns [Logger] with the provided caller skip frame count based on a global logger.
