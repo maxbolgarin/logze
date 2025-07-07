@@ -470,30 +470,42 @@ func (l Logger) logf(ev *zerolog.Event, msg string, args []any) {
 func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...any) (*zerolog.Event, []any) {
 	newFields := args
 	for i, a := range args {
-		if err, ok := a.(error); ok {
-			if l.stackTrace {
-				// Hack to use github.com/maxbolgarin/errm without importing it
-				errmErr, ok := err.(interface {
-					StackForLogger() []any
-				})
-				if ok {
-					ev = ev.Fields(errmErr.StackForLogger())
-				} else {
-					ev = ev.Stack()
-					err = errors.WithStack(err)
-				}
-			}
-			l.incErrorCounter(err)
-			if !inFormat {
-				if i-1 >= 0 {
-					newFields = append(args[:i-1], args[i+1:]...)
-				}
-				if i == 0 {
-					newFields = args[1:]
-				}
-			}
-			return ev.Err(err), newFields
+		err, ok := a.(error)
+		if !ok {
+			continue
 		}
+		if l.stackTrace {
+			// Hack to use github.com/maxbolgarin/errm without importing it
+			errmErr, ok := err.(interface {
+				StackForLogger() []any
+			})
+			if ok {
+				ev = ev.Fields(errmErr.StackForLogger())
+			} else {
+				ev = ev.Stack()
+				err = errors.WithStack(err)
+			}
+		}
+		l.incErrorCounter(err)
+		if !inFormat {
+			// Remove the error from fields to avoid duplicate logging
+			// For key-value pairs, we need to remove both key and value if error is a value
+			if i > 0 && i%2 == 1 {
+				// Error is at odd position (value position), remove key-value pair
+				newFields = make([]any, 0, len(args)-2)
+				newFields = append(newFields, args[:i-1]...)
+				newFields = append(newFields, args[i+1:]...)
+			} else if i == 0 {
+				// Error is at the beginning
+				newFields = args[1:]
+			} else {
+				// Error is at even position (key position), only remove the error
+				newFields = make([]any, 0, len(args)-1)
+				newFields = append(newFields, args[:i]...)
+				newFields = append(newFields, args[i+1:]...)
+			}
+		}
+		return ev.Err(err), newFields
 	}
 	return ev, newFields
 }
