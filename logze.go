@@ -16,8 +16,27 @@ import (
 	"github.com/rs/zerolog/pkgerrors"
 )
 
-// Logger represents an initialized logger.
-// Default value behaves as default [zerolog.Logger].
+// Logger represents a high-level structured logger with convenient methods.
+// It wraps [zerolog.Logger] and provides additional features like error counting,
+// message filtering, stack traces, and context integration.
+//
+// Logger supports:
+//   - Multiple log levels (trace, debug, info, warn, error, fatal)
+//   - Structured logging with key-value fields
+//   - Error counting and stack trace collection
+//   - Message filtering and ignoring specific messages
+//   - Context integration for request-scoped logging
+//   - Conditional logging with *If methods
+//   - Formatted logging with *f methods
+//
+// The zero value of Logger behaves as [zerolog.Nop] (no-op logger).
+// Use [New], [NewConsoleJSON], or other constructors to create a functional logger.
+//
+// Example usage:
+//
+//	logger := logze.New(logze.C().WithConsoleJSON().WithLevel("info"))
+//	logger.Info("User logged in", "user_id", 123, "ip", "192.168.1.1")
+//	logger.Err(err, "Failed to process request", "request_id", "abc123")
 type Logger struct {
 	l           zerolog.Logger
 	errCounter  ErrorCounter
@@ -28,26 +47,42 @@ type Logger struct {
 	diodeWriter *diode.Writer
 }
 
-// New returns a new [Logger] with provided config and fields.
-//   - Default output is [io.Discard], so you should provide at least one [io.Writer] in [Config] when creating a logger.
-//   - Default level is info.
-//   - Fields should be passed as (key, value) pairs, its will be applied to all messages.
+// New creates a new [Logger] instance with the specified configuration and default fields.
 //
-// For example, if you use [Logger] like that:
+// Parameters:
+//   - cfg: Configuration defining output writers, log level, hooks, and other settings
+//   - fields: Optional key-value pairs that will be included in every log message
 //
-//	lg := New(C().WithConsoleJSON(), "foo", "bar")
-//	lg.Info("some message", "key", "value")
-//	lg.Err(errors.New("some error"), "cannot handle")
+// Default behaviors:
+//   - Output: [io.Discard] if no writers specified (logs are discarded)
+//   - Level: "info" if not specified
+//   - Time format: [time.RFC3339] if not specified
+//   - Diode: Enabled by default for non-blocking writes (see warning below)
 //
-// You will have output:
+// Fields should be passed as alternating key-value pairs and will be applied to all messages
+// produced by this logger instance.
 //
-//	{"level":"info","time":"2023-11-20T18:48:14+03:00","message":"some message","foo":"bar","key":"value"}
-//	{"level":"error","time":"2023-11-20T18:48:14+03:00","error":"some error","message":"cannot handle","foo":"bar"}
+// Example usage:
 //
-// Warning! If you use diode (default behaviour), logger need some time to flush messages.
-// Thats why you won't see any logs if you shoutdown your app right after logging.
-// Use [Config.WithNoDiode] to disable it,
-// but you will need to fix problem of blocking goroutine when writing may loge in Stderr if you have it.
+//	logger := New(C().WithConsoleJSON().WithLevel("debug"), "service", "api", "version", "1.0")
+//	logger.Info("User authenticated", "user_id", 123, "method", "oauth")
+//	logger.Err(err, "Database connection failed", "host", "localhost", "port", 5432)
+//
+// Example output:
+//
+//	{"level":"info","time":"2023-11-20T18:48:14+03:00","message":"User authenticated","service":"api","version":"1.0","user_id":123,"method":"oauth"}
+//	{"level":"error","time":"2023-11-20T18:48:14+03:00","error":"Database connection failed","message":"Database connection failed","service":"api","version":"1.0","host":"localhost","port":5432}
+//
+// ⚠️  IMPORTANT: Diode Writer Behavior
+//
+// By default, New() enables a diode writer for non-blocking log writes. This prevents
+// logging from blocking your application but requires time to flush messages to the output.
+// If your application exits immediately after logging, messages may be lost.
+//
+// Solutions:
+//   - Call logger.Close() or logger.CloseDiode() before application exit
+//   - Use cfg.WithNoDiode() to disable diode and ensure immediate writes
+//   - Note: Disabling diode may cause blocking if writing to stderr with high log volume
 func New(cfg Config, fields ...any) Logger {
 	if len(cfg.Writers) == 0 || cfg.Level == LevelDisabled {
 		cfg.Writers = []io.Writer{io.Discard}
@@ -128,7 +163,20 @@ func New(cfg Config, fields ...any) Logger {
 	}
 }
 
-// NewFromZerolog returns a new [Logger] based on provided [zerolog.Logger].
+// NewFromZerolog creates a new [Logger] wrapping an existing [zerolog.Logger].
+//
+// This function is useful when you already have a configured zerolog.Logger instance
+// and want to use logze's additional features like error counting, message filtering,
+// and enhanced context integration.
+//
+// Note: The returned Logger will not have diode writer, error counter, or message
+// filtering features unless configured separately using With* methods.
+//
+// Example usage:
+//
+//	zlogger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+//	logger := NewFromZerolog(zlogger).WithSimpleErrorCounter().WithLevel("debug")
+//	logger.Info("Migrated from zerolog", "component", "auth")
 func NewFromZerolog(l zerolog.Logger) Logger {
 	return Logger{
 		l:      l,
@@ -136,17 +184,59 @@ func NewFromZerolog(l zerolog.Logger) Logger {
 	}
 }
 
-// NewConsoleJSON returns a new [Logger] with JSON logging to stderr.
+// NewConsoleJSON creates a new [Logger] with JSON output to stderr and info level.
+//
+// This is a convenience constructor for quick setup during development or simple applications.
+// It's equivalent to: New(NewConfig().WithConsoleJSON().WithLevel("info"), fields...)
+//
+// The logger outputs structured JSON logs to stderr with timestamps and includes any
+// provided fields in all log messages.
+//
+// Example usage:
+//
+//	logger := NewConsoleJSON("service", "web-api", "version", "2.1.0")
+//	logger.Info("Server starting", "port", 8080)
+//	// Output: {"level":"info","time":"2023-11-20T18:48:14+03:00","message":"Server starting","service":"web-api","version":"2.1.0","port":8080}
+//
+// For more configuration options, use [New] with a custom [Config].
 func NewConsoleJSON(fields ...any) Logger {
 	return New(NewConfig().WithConsoleJSON(), fields...)
 }
 
-// Nop returns a new [Logger] with no logging.
+// Nop creates a no-operation logger that discards all log messages.
+//
+// This is useful for testing, disabling logging in certain conditions, or as a safe
+// default when a logger is optional. All logging methods will execute without error
+// but produce no output.
+//
+// Example usage:
+//
+//	var logger logze.Logger
+//	if verbose {
+//		logger = logze.NewConsoleJSON()
+//	} else {
+//		logger = logze.Nop()
+//	}
+//	logger.Info("This may or may not be logged")
+//
+// Nop loggers are safe for concurrent use and have minimal performance overhead.
 func Nop() Logger {
 	return Logger{l: zerolog.Nop()}
 }
 
-// CloseDiode closes the underlying [diode.Writer] if it is used.
+// CloseDiode gracefully shuts down the diode writer, ensuring all buffered log messages are flushed.
+//
+// This method should be called before application shutdown when using the default diode writer
+// to prevent loss of buffered log messages. If no diode writer is configured, this method
+// returns nil and has no effect.
+//
+// Example usage:
+//
+//	logger := logze.New(logze.C().WithConsoleJSON())
+//	defer logger.CloseDiode() // Ensure logs are flushed before exit
+//
+//	logger.Info("Application shutting down")
+//	// Without CloseDiode(), this message might be lost
 func (l Logger) CloseDiode() error {
 	if l.diodeWriter != nil {
 		return l.diodeWriter.Close()
@@ -154,14 +244,40 @@ func (l Logger) CloseDiode() error {
 	return nil
 }
 
-// Close closes the underlying [diode.Writer] if it is used.
+// Close is an alias for [Logger.CloseDiode] that implements [io.Closer].
+//
+// This allows Logger to be used with defer statements and other APIs that expect
+// an io.Closer interface.
+//
+// Example usage:
+//
+//	logger := logze.New(logze.C().WithConsoleJSON())
+//	defer logger.Close() // Implements io.Closer
 func (l Logger) Close() error {
 	return l.CloseDiode()
 }
 
 type ctxKey struct{}
 
-// AddToContext adds the [Logger] to the [context.Context].
+// AddToContext embeds this logger into a context, making it available for request-scoped logging.
+//
+// This enables passing logger instances through context chains, which is particularly
+// useful in web applications, gRPC services, and other request-oriented architectures.
+//
+// Disabled loggers are not stored in the context to avoid unnecessary memory usage.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON("request_id", "abc123")
+//	ctx = logger.AddToContext(ctx)
+//
+//	// Pass ctx to other functions
+//	processRequest(ctx)
+//
+//	func processRequest(ctx context.Context) {
+//		logger := logze.GetFromContext(ctx)
+//		logger.Info("Processing request") // Includes request_id
+//	}
 func (l Logger) AddToContext(ctx context.Context) context.Context {
 	if _, ok := ctx.Value(ctxKey{}).(*Logger); !ok && l.l.GetLevel() == zerolog.Disabled {
 		// Do not store disabled logger.
@@ -170,7 +286,24 @@ func (l Logger) AddToContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, ctxKey{}, &l)
 }
 
-// GetFromContext returns the [Logger] from the [context.Context].
+// GetFromContext retrieves a logger instance from the context.
+//
+// If no logger is found in the context, returns a no-op logger that safely
+// discards all log messages. This ensures that logging calls never panic
+// even when no logger has been embedded in the context.
+//
+// Example usage:
+//
+//	func handleRequest(ctx context.Context) {
+//		logger := logze.GetFromContext(ctx)
+//		logger.Info("Handling request") // Safe even if no logger in context
+//
+//		// Add request-specific fields
+//		logger = logger.With("user_id", getUserID(ctx))
+//		logger.Debug("User authenticated")
+//	}
+//
+// See [Logger.AddToContext] for embedding loggers into contexts.
 func GetFromContext(ctx context.Context) Logger {
 	l, ok := ctx.Value(ctxKey{}).(*Logger)
 	if !ok || l == nil {
@@ -179,8 +312,27 @@ func GetFromContext(ctx context.Context) Logger {
 	return *l
 }
 
-// Update replaces underlying logger with a new one created using provided config and fields.
-// It is NOT safe for concurrent use.
+// Update replaces the logger's configuration and fields with new values.
+//
+// This method modifies the logger in-place, replacing its underlying configuration,
+// output writers, level, error counter, and other settings. Any existing fields
+// are replaced with the new ones.
+//
+// ⚠️  THREAD SAFETY WARNING
+//
+// Update is NOT safe for concurrent use. Ensure no other goroutines are using
+// this logger instance while calling Update. For concurrent scenarios, create
+// a new logger instance instead.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON()
+//	logger.Info("Initial message")
+//
+//	// Reconfigure for production use
+//	prodConfig := logze.C(file).WithLevel("warn").WithSimpleErrorCounter()
+//	logger.Update(prodConfig, "environment", "production")
+//	logger.Info("This won't be logged due to warn level")
 func (l *Logger) Update(cfg Config, fields ...any) {
 	newLogger := New(cfg, fields...)
 	l.l = newLogger.l
@@ -192,23 +344,73 @@ func (l *Logger) Update(cfg Config, fields ...any) {
 	l.diodeWriter = newLogger.diodeWriter
 }
 
-// NotInited returns true if [Logger] is not inited (struct with default values).
+// NotInited reports whether the logger has been properly initialized.
+//
+// Returns true if the logger is a zero-value struct that hasn't been created
+// through any constructor ([New], [NewConsoleJSON], etc.). Zero-value loggers
+// behave as no-op loggers but this method can be used to detect uninitialized state.
+//
+// Example usage:
+//
+//	var logger logze.Logger
+//	if logger.NotInited() {
+//		logger = logze.NewConsoleJSON()
+//	}
+//	logger.Info("Logger is now ready")
 func (l Logger) NotInited() bool {
 	return !l.inited
 }
 
-// WithFields returns [Logger] with applied fields to all messages, provided as (key, value) pairs.
+// WithFields creates a new logger with additional fields that will be included in every log message.
+//
+// Fields should be provided as alternating key-value pairs. These fields will be
+// added to any fields already configured on the logger and will appear in all
+// subsequent log messages from the returned logger.
+//
+// This method returns a new logger instance; the original logger is not modified.
+//
+// Example usage:
+//
+//	baseLogger := logze.NewConsoleJSON("service", "api")
+//	requestLogger := baseLogger.WithFields("request_id", "abc123", "user_id", 456)
+//	requestLogger.Info("Processing request")
+//	// Output includes: "service":"api","request_id":"abc123","user_id":456
+//
+// Fields can be any JSON-serializable values: strings, numbers, booleans, slices, maps.
 func (l Logger) WithFields(fields ...any) Logger {
 	l.l = l.l.With().Fields(fields).Logger()
 	return l
 }
 
-// With is a shortcut for [Logger.WithFields].
+// With is a convenient shorthand for [Logger.WithFields].
+//
+// It creates a new logger with additional fields, identical to calling WithFields.
+// This shorter name makes chaining more readable in complex logging setups.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().With("component", "auth").With("version", "2.1")
+//	logger.Info("Authentication module initialized")
 func (l Logger) With(fields ...any) Logger {
 	return l.WithFields(fields...)
 }
 
-// WithLevel returns [Logger] with an applied log level.
+// WithLevel creates a new logger with the specified log level.
+//
+// Valid levels are: "trace", "debug", "info", "warn", "error", "fatal", "disabled".
+// Messages below the specified level will be discarded. If an empty string is
+// provided, the logger is returned unchanged.
+//
+// This method returns a new logger instance; the original logger is not modified.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithLevel("warn")
+//	logger.Debug("This won't be logged")  // Below warn level
+//	logger.Warn("This will be logged")    // At warn level
+//	logger.Error("This will be logged")   // Above warn level
+//
+// Level hierarchy: trace < debug < info < warn < error < fatal
 func (l Logger) WithLevel(level string) Logger {
 	if level == "" {
 		return l
@@ -221,25 +423,72 @@ func (l Logger) WithLevel(level string) Logger {
 	return l
 }
 
-// WithStack returns [Logger] with an applied stackTrace.
+// WithStack creates a new logger with stack trace collection enabled or disabled.
+//
+// When enabled, error logging methods will automatically collect and include
+// stack traces in the log output (for Error logs). This is useful for debugging but adds
+// performance overhead.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithStack(true)
+//	logger.Err(err, "Database connection failed")
+//	// Output will include stack trace information
 func (l Logger) WithStack(stackTrace bool) Logger {
 	l.stackTrace = stackTrace
 	return l
 }
 
-// WithErrorCounter returns [Logger] with the provided [ErrorCounter].
+// WithErrorCounter creates a new logger with the specified error counter.
+//
+// Error counters track the number of errors logged and can be used for
+// monitoring, alerting, or debugging purposes. The counter is incremented
+// whenever Err, Error, Fatal, or Panic methods are called.
+//
+// Example usage:
+//
+//	counter := &MyCustomErrorCounter{}
+//	logger := logze.NewConsoleJSON().WithErrorCounter(counter)
+//	logger.Err(err, "Something failed")
+//	// counter.Inc(err) was called automatically
 func (l Logger) WithErrorCounter(ec ErrorCounter) Logger {
 	l.errCounter = ec
 	return l
 }
 
-// WithSimpleErrorCounter returns [Logger] with a simple [ErrorCounter].
+// WithSimpleErrorCounter creates a new logger with a built-in atomic error counter.
+//
+// This is a convenience method that adds a simple thread-safe error counter
+// to track the total number of errors logged. Use GetErrorCounter() to access
+// the counter and retrieve the count.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithSimpleErrorCounter()
+//	logger.Err(err1, "First error")
+//	logger.Err(err2, "Second error")
+//
+//	counter := logger.GetErrorCounter().(*logze.SimpleErrorCounter)
+//	fmt.Printf("Total errors: %d", counter.Count.Load()) // Prints: Total errors: 2
 func (l Logger) WithSimpleErrorCounter() Logger {
 	l.errCounter = newSimpleErrorCounter()
 	return l
 }
 
-// WithToIgnore returns [Logger] with the provided list of messages to ignore.
+// WithToIgnore creates a new logger that filters out specified messages.
+//
+// Messages that exactly match any of the provided strings, or contain them as
+// substrings, will be discarded and not logged. This is useful for reducing
+// noise from repeated or unimportant messages.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithToIgnore("health check", "ping")
+//	logger.Info("health check")     // This won't be logged
+//	logger.Info("ping from server") // This won't be logged (contains "ping")
+//	logger.Info("user login")       // This will be logged
+//
+// Note: Message filtering happens before field processing for performance.
 func (l Logger) WithToIgnore(toIgnore ...string) Logger {
 	l.toIgnore = toIgnore
 	// Rebuild ignore map for O(1) lookups
@@ -250,130 +499,340 @@ func (l Logger) WithToIgnore(toIgnore ...string) Logger {
 	return l
 }
 
-// WithCaller returns [Logger] with the provided caller skip frame count.
+// WithCaller creates a new logger that includes caller information in log messages.
+//
+// The callerSkipFrameCount parameter determines how many stack frames to skip
+// when determining the caller. This is useful when wrapping the logger in
+// other functions and you want to report the actual caller, not the wrapper.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithCaller(2)
+//	logger.Info("Message with caller info")
+//	// Output includes: "caller":"/path/to/file.go:123"
+//
+// Use [WithDefaultCaller] for the standard skip count.
 func (l Logger) WithCaller(callerSkipFrameCount int) Logger {
 	l.l = l.l.With().CallerWithSkipFrameCount(callerSkipFrameCount).Logger()
 	return l
 }
 
-// WithDefaultCaller returns [Logger] with the default caller skip frame count.
+// WithDefaultCaller creates a new logger with caller information using the default skip frame count.
+//
+// This is equivalent to WithCaller(DefaultCallerSkipFrameCount) and is the
+// recommended way to enable caller information for most use cases.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithDefaultCaller()
+//	logger.Info("Message with caller info")
+//	// Output includes: "caller":"/path/to/file.go:123"
 func (l Logger) WithDefaultCaller() Logger {
 	l.l = l.l.With().CallerWithSkipFrameCount(DefaultCallerSkipFrameCount).Logger()
 	return l
 }
 
-// WithSampler returns [Logger] with the provided [zerolog.Sampler].
+// WithSampler creates a new logger with the specified sampling configuration.
+//
+// Sampling allows you to log only a subset of messages to reduce log volume
+// and improve performance. The sampler determines which messages are logged
+// and which are discarded.
+//
+// Example usage:
+//
+//	// Log only 10% of debug messages
+//	sampler := zerolog.RandomSampler(10)
+//	logger := logze.NewConsoleJSON().WithSampler(sampler)
+//
+// See [Config.WithPercentageSampler], [Config.WithBurstSampler], and
+// [Config.WithMaxSampler] for convenient sampling configurations.
 func (l Logger) WithSampler(sampler zerolog.Sampler) Logger {
 	l.l = l.l.Sample(sampler)
 	return l
 }
 
-// Trace logs a message in trace level adding provided fields and information about method caller.
+// Trace logs a message at trace level with optional fields and caller information.
+//
+// Trace level is the most verbose logging level, typically used for detailed
+// debugging information that you normally wouldn't want in production.
+// This method automatically includes caller information.
+//
+// Fields should be provided as alternating key-value pairs.
+//
+// Example usage:
+//
+//	logger.Trace("Function entry", "function", "processUser", "user_id", 123)
+//	// Output: {"level":"trace","caller":"main.go:45","message":"Function entry","function":"processUser","user_id":123}
 func (l Logger) Trace(msg string, fields ...any) {
 	l.log(l.l.Trace().Caller(1), msg, fields)
 }
 
-// Tracef logs a formatted message in trace level adding provided fields after formatting args
-// and information about method caller.
+// Tracef logs a formatted message at trace level with caller information.
+//
+// This is the formatted version of Trace. Format verbs are processed using fmt.Sprintf.
+// Any additional arguments beyond the format placeholders are treated as structured fields.
+//
+// Example usage:
+//
+//	logger.Tracef("Processing %d items for user %s", count, username, "request_id", "abc123")
+//	// Formats the message, then adds request_id as a structured field
 func (l Logger) Tracef(msg string, args ...any) {
 	l.logf(l.l.Trace().Caller(1), msg, args)
 }
 
-// Traceif logs a message in trace level adding provided fields and information about method caller if condition is true.
+// TraceIf conditionally logs a message at trace level with caller information.
+//
+// This is a convenience method that only logs if the condition is true.
+// Useful for avoiding expensive field preparation when logging might be skipped.
+//
+// Example usage:
+//
+//	logger.TraceIf(debugMode, "Debug info", "state", expensiveStateCapture())
+//	// Only evaluates expensiveStateCapture() if debugMode is true
 func (l Logger) TraceIf(condition bool, msg string, fields ...any) {
 	if condition {
 		l.Trace(msg, fields...)
 	}
 }
 
-// Debug logs a message in debug level adding provided fields.
+// Debug logs a message at debug level with optional structured fields.
+//
+// Debug level is used for diagnostic information that's useful during development
+// and troubleshooting but typically disabled in production for performance.
+//
+// Fields should be provided as alternating key-value pairs.
+//
+// Example usage:
+//
+//	logger.Debug("Cache hit", "key", "user:123", "ttl", "5m", "size", 1024)
+//	// Output: {"level":"debug","message":"Cache hit","key":"user:123","ttl":"5m","size":1024}
 func (l Logger) Debug(msg string, fields ...any) {
 	l.log(l.l.Debug(), msg, fields)
 }
 
-// Debugf logs a formatted message in debug level adding provided fields after formatting args.
+// Debugf logs a formatted message at debug level.
+//
+// This is the formatted version of Debug. Format verbs are processed using fmt.Sprintf.
+// Any additional arguments beyond the format placeholders are treated as structured fields.
+//
+// Example usage:
+//
+//	logger.Debugf("Query executed in %dms", duration, "query", sqlQuery, "rows", rowCount)
+//	// Formats the duration into the message, then adds query and rows as fields
 func (l Logger) Debugf(msg string, args ...any) {
 	l.logf(l.l.Debug(), msg, args)
 }
 
-// DebugIf logs a message in debug level adding provided fields if condition is true.
+// DebugIf conditionally logs a message at debug level.
+//
+// This is a convenience method that only logs if the condition is true.
+// Useful for conditional debugging without cluttering code with if statements.
+//
+// Example usage:
+//
+//	logger.DebugIf(cfg.VerboseSQL, "SQL executed", "query", query, "duration", elapsed)
+//	// Only logs SQL information when verbose SQL logging is enabled
 func (l Logger) DebugIf(condition bool, msg string, fields ...any) {
 	if condition {
 		l.Debug(msg, fields...)
 	}
 }
 
-// Info logs a message in info level adding provided fields.
+// Info logs a message at info level with optional structured fields.
+//
+// Info level is the standard logging level for general application information
+// such as startup messages, important business events, and successful operations.
+// This level is typically enabled in production.
+//
+// Fields should be provided as alternating key-value pairs.
+//
+// Example usage:
+//
+//	logger.Info("User authenticated", "user_id", 123, "method", "oauth", "ip", "192.168.1.1")
+//	// Output: {"level":"info","message":"User authenticated","user_id":123,"method":"oauth","ip":"192.168.1.1"}
 func (l Logger) Info(msg string, fields ...any) {
 	l.log(l.l.Info(), msg, fields)
 }
 
-// Infof logs a formatted message in info level adding provided fields after formatting args.
+// Infof logs a formatted message at info level.
+//
+// This is the formatted version of Info. Format verbs are processed using fmt.Sprintf.
+// Any additional arguments beyond the format placeholders are treated as structured fields.
+//
+// Example usage:
+//
+//	logger.Infof("Server started on port %d", port, "environment", env, "version", version)
+//	// Formats the port into the message, then adds environment and version as fields
 func (l Logger) Infof(msg string, args ...any) {
 	l.logf(l.l.Info(), msg, args)
 }
 
-// InfoIf logs a message in info level adding provided fields if condition is true.
+// InfoIf conditionally logs a message at info level.
+//
+// This is a convenience method that only logs if the condition is true.
+// Useful for conditional informational logging based on configuration or state.
+//
+// Example usage:
+//
+//	logger.InfoIf(cfg.LogSuccessfulRequests, "Request completed", "duration", elapsed, "status", 200)
+//	// Only logs successful requests when the feature is enabled
 func (l Logger) InfoIf(condition bool, msg string, fields ...any) {
 	if condition {
 		l.Info(msg, fields...)
 	}
 }
 
-// Warn logs a message in warning level adding provided fields.
+// Warn logs a message at warning level with optional structured fields.
+//
+// Warning level indicates potentially problematic situations that don't prevent
+// the application from continuing but should be investigated. Examples include
+// deprecated API usage, fallback mechanisms, or performance issues.
+//
+// Fields should be provided as alternating key-value pairs.
+//
+// Example usage:
+//
+//	logger.Warn("API rate limit approaching", "current", 950, "limit", 1000, "user_id", 123)
+//	// Output: {"level":"warn","message":"API rate limit approaching","current":950,"limit":1000,"user_id":123}
 func (l Logger) Warn(msg string, fields ...any) {
 	l.log(l.l.Warn(), msg, fields)
 }
 
-// Warnf logs a formatted message in warn level adding provided fields after formatting args.
+// Warnf logs a formatted message at warning level.
+//
+// This is the formatted version of Warn. Format verbs are processed using fmt.Sprintf.
+// Any additional arguments beyond the format placeholders are treated as structured fields.
+//
+// Example usage:
+//
+//	logger.Warnf("Cache miss for key %s", key, "cache_type", "redis", "fallback", "database")
+//	// Formats the key into the message, then adds cache_type and fallback as fields
 func (l Logger) Warnf(msg string, args ...any) {
 	l.logf(l.l.Warn(), msg, args)
 }
 
-// WarnIf logs a message in warning level adding provided fields if condition is true.
+// WarnIf conditionally logs a message at warning level.
+//
+// This is a convenience method that only logs if the condition is true.
+// Useful for conditional warnings based on thresholds or configuration.
+//
+// Example usage:
+//
+//	logger.WarnIf(responseTime > threshold, "Slow response", "duration", responseTime, "threshold", threshold)
+//	// Only warns when response time exceeds the configured threshold
 func (l Logger) WarnIf(condition bool, msg string, fields ...any) {
 	if condition {
 		l.Warn(msg, fields...)
 	}
 }
 
-// Err logs a provided error in error level adding provided fields.
+// Err logs an error with additional context at error level.
+//
+// This method logs both the error and a descriptive message with optional structured fields.
+// The error is automatically added to the log entry and, if error counting is enabled,
+// increments the error counter. Stack traces are included if enabled via WithStack.
+//
+// Fields should be provided as alternating key-value pairs.
+//
+// Example usage:
+//
+//	logger.Err(err, "Database connection failed", "host", "localhost", "database", "users", "retry", 3)
+//	// Output: {"level":"error","error":"connection refused","message":"Database connection failed","host":"localhost","database":"users","retry":3}
 func (l Logger) Err(err error, msg string, fields ...any) {
 	ev, _ := l.setErrorWithStack(l.l.Error(), false, err)
 	l.log(ev, msg, fields)
 }
 
-// Errf logs a formatted message in error level adding provided fields after formatting args.
+// Errf logs an error with a formatted message at error level.
+//
+// This is the formatted version of Err. Format verbs are processed using fmt.Sprintf.
+// The error is automatically handled and any additional arguments beyond format placeholders
+// are treated as structured fields.
+//
+// Example usage:
+//
+//	logger.Errf(err, "Failed to process %d items", count, "batch_id", batchID, "remaining", remaining)
+//	// Formats the count into the message, then adds batch_id and remaining as fields
 func (l Logger) Errf(err error, msg string, args ...any) {
 	ev, _ := l.setErrorWithStack(l.l.Error(), false, err)
 	l.logf(ev, msg, args)
 }
 
-// ErrIf logs a provided error in error level adding provided fields if condition is true.
+// ErrIf conditionally logs an error with additional context.
+//
+// This is a convenience method that only logs if the condition is true.
+// Useful for conditional error logging based on severity or configuration.
+//
+// Example usage:
+//
+//	logger.ErrIf(err != nil, err, "Operation failed", "operation", "user_update", "user_id", userID)
+//	// Only logs if an error actually occurred
 func (l Logger) ErrIf(condition bool, err error, msg string, fields ...any) {
 	if condition {
 		l.Err(err, msg, fields...)
 	}
 }
 
-// Error logs a message in error level adding provided fields.
+// Error logs an error message at error level without an associated error object.
+//
+// Use this method when you have an error condition but no specific error object,
+// or when logging error-level information that isn't necessarily about a failure.
+//
+// Fields should be provided as alternating key-value pairs.
+//
+// Example usage:
+//
+//	logger.Error("Validation failed", "field", "email", "value", userEmail, "reason", "invalid format")
+//	// Output: {"level":"error","message":"Validation failed","field":"email","value":"user@domain","reason":"invalid format"}
 func (l Logger) Error(msg string, fields ...any) {
 	l.log(l.l.Error(), msg, fields)
 }
 
-// Errorf logs a formatted message in error level adding provided fields after formatting args.
+// Errorf logs a formatted error message at error level.
+//
+// This is the formatted version of Error. Format verbs are processed using fmt.Sprintf.
+// Any additional arguments beyond the format placeholders are treated as structured fields.
+//
+// Example usage:
+//
+//	logger.Errorf("Rate limit exceeded: %d requests in %s", count, duration, "client_ip", clientIP)
+//	// Formats the count and duration into the message, then adds client_ip as a field
 func (l Logger) Errorf(msg string, args ...any) {
 	l.logf(l.l.Error(), msg, args)
 }
 
-// ErrorIf logs a message in error level adding provided fields if condition is true.
+// ErrorIf conditionally logs an error message at error level.
+//
+// This is a convenience method that only logs if the condition is true.
+// Useful for conditional error-level logging without associated error objects.
+//
+// Example usage:
+//
+//	logger.ErrorIf(attempts > maxRetries, "Max retries exceeded", "attempts", attempts, "max", maxRetries)
+//	// Only logs when retry limit is actually exceeded
 func (l Logger) ErrorIf(condition bool, msg string, fields ...any) {
 	if condition {
 		l.Error(msg, fields...)
 	}
 }
 
-// ErrStack logs a stack trace of provided error as message in error level adding fields.
+// ErrStack logs an error with its full stack trace as the message.
+//
+// This method formats the error with its complete stack trace and logs it as the
+// main message content. This is useful for debugging when you need to see the
+// exact call path that led to an error.
+//
+// If the error doesn't already contain stack trace information, it will be wrapped
+// to include stack trace details. Errors from github.com/maxbolgarin/errm are
+// automatically supported for enhanced stack trace formatting.
+//
+// Example usage:
+//
+//	logger.ErrStack(err, "component", "payment", "transaction_id", txID)
+//	// Logs the full stack trace as the message, with component and transaction_id as fields
+//
+// Note: The stack trace output can be quite verbose. Consider using Err() with WithStack()
+// for more structured error logging in production.
 func (l Logger) ErrStack(err error, fields ...any) {
 	_, ok := err.(interface {
 		StackForLogger() []any
@@ -384,7 +843,21 @@ func (l Logger) ErrStack(err error, fields ...any) {
 	l.log(l.l.Error(), fmt.Sprintf("%+v", err), fields)
 }
 
-// Fatal logs a message in fatal level using fmt.Sprint to interpret args, then calls os.Exit(1).
+// Fatal logs a fatal error message and immediately terminates the program with exit code 1.
+//
+// ⚠️  WARNING: This method calls os.Exit(1) after logging, terminating the program.
+// Use this only for unrecoverable errors where the application cannot continue.
+// No deferred functions will run after this call.
+//
+// Arguments are concatenated using fmt.Sprint. If error counting is enabled,
+// the error counter is incremented before termination.
+//
+// Example usage:
+//
+//	logger.Fatal("Database initialization failed - cannot continue")
+//	// Logs the message and immediately exits with code 1
+//
+// For recoverable errors, use Error() or Err() instead.
 func (l Logger) Fatal(v ...any) {
 	s := fmt.Sprint(v...)
 	l.incErrorCounter(errors.New(s))
@@ -392,21 +865,55 @@ func (l Logger) Fatal(v ...any) {
 	os.Exit(1)
 }
 
-// Fatalf logs a formatted message in fatal level, then calls os.Exit(1).
+// Fatalf logs a formatted fatal error message and immediately terminates the program with exit code 1.
+//
+// ⚠️  WARNING: This method calls os.Exit(1) after logging, terminating the program.
+// Use this only for unrecoverable errors where the application cannot continue.
+// No deferred functions will run after this call.
+//
+// Arguments are formatted using fmt.Sprintf. If error counting is enabled,
+// the error counter is incremented before termination.
+//
+// Example usage:
+//
+//	logger.Fatalf("Failed to bind to port %d: %v", port, err)
+//	// Logs the formatted message and immediately exits with code 1
 func (l Logger) Fatalf(format string, args ...any) {
 	l.incErrorCounter(fmt.Errorf(format, args...))
 	l.logf(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	os.Exit(1)
 }
 
-// FatalIf logs a message in fatal level adding provided fields if condition is true, then calls os.Exit(1).
+// FatalIf conditionally logs a fatal error and terminates the program.
+//
+// ⚠️  WARNING: This method calls os.Exit(1) if the condition is true.
+// Use this only for unrecoverable errors where the application cannot continue.
+// No deferred functions will run after this call.
+//
+// Example usage:
+//
+//	logger.FatalIf(config == nil, "Configuration file is required")
+//	// Only exits if config is actually nil
 func (l Logger) FatalIf(condition bool, v ...any) {
 	if condition {
 		l.Fatal(v...)
 	}
 }
 
-// Fatalln logs a message in fatal level using fmt.Sprintln to interpret args, then calls os.Exit(1).
+// Fatalln logs a fatal error message with a newline and immediately terminates the program with exit code 1.
+//
+// ⚠️  WARNING: This method calls os.Exit(1) after logging, terminating the program.
+// Use this only for unrecoverable errors where the application cannot continue.
+// No deferred functions will run after this call.
+//
+// Arguments are concatenated using fmt.Sprintln (which adds spaces between
+// arguments and a newline at the end). If error counting is enabled,
+// the error counter is incremented before termination.
+//
+// Example usage:
+//
+//	logger.Fatalln("Critical error:", err)
+//	// Logs "Critical error: <error message>\n" and immediately exits with code 1
 func (l Logger) Fatalln(v ...any) {
 	s := fmt.Sprintln(v...)
 	l.incErrorCounter(errors.New(s))
@@ -414,7 +921,21 @@ func (l Logger) Fatalln(v ...any) {
 	os.Exit(1)
 }
 
-// Panic logs a message in fatal level using fmt.Sprint to interpret args, then calls panic().
+// Panic logs a message at fatal level and immediately panics with the message.
+//
+// ⚠️  WARNING: This method calls panic() after logging, which will unwind the stack
+// and terminate the current goroutine unless recovered. Use this only for truly
+// exceptional conditions that represent programming errors or unrecoverable states.
+//
+// Arguments are concatenated using fmt.Sprint. If error counting is enabled,
+// the error counter is incremented before panicking.
+//
+// Example usage:
+//
+//	logger.Panic("Invariant violated: user cannot be nil at this point")
+//	// Logs the message and immediately panics with the message string
+//
+// For recoverable errors, use Error() or Err() instead.
 func (l Logger) Panic(v ...any) {
 	s := fmt.Sprint(v...)
 	l.incErrorCounter(errors.New(s))
@@ -422,21 +943,54 @@ func (l Logger) Panic(v ...any) {
 	panic(s)
 }
 
-// Panicf logs a formatted message in fatal level, then calls panic().
+// Panicf logs a formatted message at fatal level and immediately panics with the formatted message.
+//
+// ⚠️  WARNING: This method calls panic() after logging, which will unwind the stack
+// and terminate the current goroutine unless recovered. Use this only for truly
+// exceptional conditions that represent programming errors or unrecoverable states.
+//
+// Arguments are formatted using fmt.Sprintf. If error counting is enabled,
+// the error counter is incremented before panicking.
+//
+// Example usage:
+//
+//	logger.Panicf("Buffer overflow: tried to write %d bytes to %d byte buffer", writeSize, bufSize)
+//	// Logs and panics with the formatted message
 func (l Logger) Panicf(format string, args ...any) {
 	l.incErrorCounter(fmt.Errorf(format, args...))
 	l.logf(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	panic(fmt.Sprintf(format, args...))
 }
 
-// PanicIf logs a message in fatal level adding provided fields if condition is true, then calls panic().
+// PanicIf conditionally logs a message and panics if the condition is true.
+//
+// ⚠️  WARNING: This method calls panic() if the condition is true, which will unwind
+// the stack and terminate the current goroutine unless recovered.
+//
+// Example usage:
+//
+//	logger.PanicIf(len(items) == 0, "Items slice cannot be empty")
+//	// Only panics if the slice is actually empty
 func (l Logger) PanicIf(condition bool, v ...any) {
 	if condition {
 		l.Panic(v...)
 	}
 }
 
-// Panicln logs a message in fatal level using fmt.Sprintln to interpret args, then calls panic().
+// Panicln logs a message with a newline at fatal level and immediately panics with the message.
+//
+// ⚠️  WARNING: This method calls panic() after logging, which will unwind the stack
+// and terminate the current goroutine unless recovered. Use this only for truly
+// exceptional conditions that represent programming errors or unrecoverable states.
+//
+// Arguments are concatenated using fmt.Sprintln (which adds spaces between
+// arguments and a newline at the end). If error counting is enabled,
+// the error counter is incremented before panicking.
+//
+// Example usage:
+//
+//	logger.Panicln("Critical invariant failed:", details)
+//	// Logs "Critical invariant failed: <details>\n" and panics with that string
 func (l Logger) Panicln(v ...any) {
 	s := fmt.Sprintln(v...)
 	l.incErrorCounter(errors.New(s))
@@ -444,7 +998,19 @@ func (l Logger) Panicln(v ...any) {
 	panic(s)
 }
 
-// Print logs a message without level using [fmt.Sprint] to interpret args.
+// Print logs a message without any level designation using fmt.Sprint to format arguments.
+//
+// This method outputs messages that don't fit into standard log levels or when you
+// want unstructured output. The message appears without level, timestamp, or other
+// metadata depending on your output configuration.
+//
+// Returns immediately if no arguments are provided.
+//
+// Example usage:
+//
+//	logger.Print("System starting up...")
+//	logger.Print("Current time:", time.Now())
+//	// Output depends on your logger configuration but typically just the message content
 func (l Logger) Print(v ...any) {
 	if len(v) == 0 {
 		return
@@ -452,46 +1018,130 @@ func (l Logger) Print(v ...any) {
 	l.log(l.l.Log(), fmt.Sprint(v...), nil)
 }
 
-// PrintIf logs a message without level using [fmt.Sprint] to interpret args if condition is true.
+// PrintIf conditionally logs a message without level designation.
+//
+// This is a convenience method that only logs if the condition is true.
+// Useful for conditional output without cluttering code with if statements.
+//
+// Example usage:
+//
+//	logger.PrintIf(verbose, "Detailed startup information:", details)
+//	// Only prints when verbose mode is enabled
 func (l Logger) PrintIf(condition bool, v ...any) {
 	if condition {
 		l.Print(v...)
 	}
 }
 
-// PrintStack logs a current stack trace.
+// PrintStack logs the current goroutine's stack trace with optional additional fields.
+//
+// This method captures and logs the call stack from the point where it's called,
+// which is useful for debugging unexpected code paths or understanding call flow.
+// Any additional arguments are treated as structured fields.
+//
+// Example usage:
+//
+//	logger.PrintStack("component", "router", "unexpected_path", requestPath)
+//	// Logs the full stack trace with component and unexpected_path as structured fields
+//
+// Note: Stack traces can be quite verbose. Use sparingly in production code.
 func (l Logger) PrintStack(v ...any) {
 	stack := debug.Stack()
 	l.log(l.l.Log(), string(stack), v)
 }
 
-// Printf logs a formatted message without level.
+// Printf logs a formatted message without level designation.
+//
+// This method formats the message using fmt.Sprintf and outputs it without
+// standard log level metadata. Any arguments beyond the format placeholders
+// are treated as structured fields.
+//
+// Example usage:
+//
+//	logger.Printf("Processing %d items", count)
+//	logger.Printf("User %s logged in", username, "session_id", sessionID)
+//	// Second example formats username into message, adds session_id as field
 func (l Logger) Printf(format string, args ...any) {
 	l.logf(l.l.Log(), format, args)
 }
 
-// Println writes a message without level using fmt.Sprintln to interpret args.
+// Println logs a message with a newline without level designation.
+//
+// Arguments are formatted using fmt.Sprintln, which adds spaces between arguments
+// and a newline at the end. The output appears without standard log level metadata.
+//
+// Example usage:
+//
+//	logger.Println("Starting application...")
+//	logger.Println("Version:", version, "Build:", buildID)
+//	// Output: "Version: 1.0.0 Build: abc123\n" (exact format depends on configuration)
 func (l Logger) Println(v ...any) {
 	l.log(l.l.Log(), fmt.Sprintln(v...), nil)
 }
 
-// Log logs a message without level using [fmt.Sprint] to interpret args.
-// It is an alias for [Logger.Print].
+// Log is an alias for [Logger.Print] that logs a message without level designation.
+//
+// This method exists for compatibility with standard library logging interfaces
+// and provides the same functionality as Print.
+//
+// Example usage:
+//
+//	logger.Log("Application event occurred")
+//	// Identical to logger.Print("Application event occurred")
 func (l Logger) Log(v ...any) {
 	l.Print(v...)
 }
 
-// Write writes bytes to underlying [io.Writer].
+// Write implements [io.Writer] interface, allowing the logger to be used anywhere an io.Writer is expected.
+//
+// This method writes the provided bytes directly to the underlying zerolog writer,
+// bypassing normal log formatting and structure. The data is written as-is.
+//
+// Example usage:
+//
+//	var w io.Writer = logger
+//	fmt.Fprintf(w, "Direct write: %s\n", data)
+//
+//	// Or with standard library log package:
+//	log.SetOutput(logger)
+//	log.Println("This goes through the logger")
 func (l Logger) Write(p []byte) (n int, err error) {
 	return l.l.Write(p)
 }
 
-// Raw returns Logger's underlying [zerolog.Logger].
+// Raw returns direct access to the underlying [zerolog.Logger] for advanced usage.
+//
+// This method provides access to the native zerolog API when you need functionality
+// not exposed by the logze wrapper. Use sparingly, as it bypasses logze's additional
+// features like error counting and message filtering.
+//
+// Example usage:
+//
+//	rawLogger := logger.Raw()
+//	event := rawLogger.Info().
+//		Str("custom_field", "value").
+//		Dur("elapsed", duration)
+//	event.Msg("Custom structured log")
+//
+// Consider using logger methods instead when possible for consistency.
 func (l Logger) Raw() *zerolog.Logger {
 	return &l.l
 }
 
-// GetErrorCounter returns Logger's underlying [ErrorCounter].
+// GetErrorCounter returns the error counter associated with this logger, if any.
+//
+// Returns nil if no error counter was configured via WithErrorCounter or
+// WithSimpleErrorCounter. The returned counter can be used to retrieve
+// error statistics or reset counts.
+//
+// Example usage:
+//
+//	if counter := logger.GetErrorCounter(); counter != nil {
+//		if simple, ok := counter.(*logze.SimpleErrorCounter); ok {
+//			errorCount := simple.Count.Load()
+//			fmt.Printf("Total errors logged: %d\n", errorCount)
+//		}
+//	}
 func (l Logger) GetErrorCounter() ErrorCounter {
 	return l.errCounter
 }

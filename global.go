@@ -8,65 +8,169 @@ import (
 
 var log = NewConsoleJSON()
 
-// Default returns a copy on a global logger.
+// Default returns a copy of the global logger instance.
+//
+// The global logger is initialized with JSON output to stderr at info level.
+// This function returns a copy, so modifications (like adding fields) won't
+// affect the global instance.
+//
+// Use this when you want to add request-specific or component-specific fields
+// to a logger without affecting other parts of your application.
+//
+// Example usage:
+//
+//	logger := logze.Default().With("component", "auth", "request_id", reqID)
+//	logger.Info("User authenticated") // Includes component and request_id
 func Default() Logger {
 	return log
 }
 
-// D is a shortcut for [Default].
+// D is a convenient shorthand for [Default].
+//
+// Example usage:
+//
+//	logger := logze.D().With("user_id", userID)
 func D() Logger {
 	return log
 }
 
-// DefaultPtr returns a pointer to a global logger.
+// DefaultPtr returns a pointer to the global logger instance.
+//
+// Unlike Default(), this returns a pointer to the actual global logger.
+// Use this when you need to share the exact same logger instance or when
+// working with APIs that expect a pointer.
+//
+// ⚠️ Warning: Modifying the returned logger affects the global instance.
+//
+// Example usage:
+//
+//	ptr := logze.DefaultPtr()
+//	// Be careful: changes affect global instance
 func DefaultPtr() *Logger {
 	return &log
 }
 
-// DP is a shortcut for [DefaultPtr].
+// DP is a convenient shorthand for [DefaultPtr].
+//
+// Example usage:
+//
+//	ptr := logze.DP()
 func DP() *Logger {
 	return &log
 }
 
-// SetDefault sets provided [Logger] as a global logger.
+// SetDefault replaces the global logger with the provided logger instance.
+//
+// This affects all subsequent calls to package-level logging functions
+// (Info, Error, etc.) and Default()/D() functions. Use this to configure
+// global logging behavior for your entire application.
+//
+// Example usage:
+//
+//	logger := logze.New(logze.C(fileWriter).WithLevel("warn").WithSimpleErrorCounter())
+//	logze.SetDefault(logger)
+//
+//	// Now all package-level logging uses the new configuration
+//	logze.Info("This uses the new global logger")
 func SetDefault(l Logger) {
 	log = l
 }
 
-// Init calls [New] function and assigns the result to global [log] variable.
-// It also calls [SetLoggerForDefault] with this new logger.
+// Init initializes the global logger with the specified configuration and fields.
+//
+// This function creates a new logger using the provided config and replaces
+// the global logger instance. It also configures the standard library log
+// package to use this logger as its output destination.
+//
+// This is typically called once during application startup to establish
+// global logging configuration.
+//
+// Example usage:
+//
+//	config := logze.C(logFile).WithLevel("info").WithSimpleErrorCounter()
+//	logze.Init(config, "service", "api", "version", "2.1.0")
+//
+//	// Now all package functions and standard log calls use this configuration
+//	logze.Info("Application started")
+//	log.Println("This also goes through logze")
 func Init(cfg Config, fields ...any) {
 	log = New(cfg, fields...)
 	SetStdLogger(log)
 }
 
-// Update calls [Logger.Update] method for global [log].
-// It also calls [SetLoggerForDefault] with this new logger.
-// It is not safe for concurrent use!
+// Update reconfigures the global logger with new settings and fields.
+//
+// This function updates the global logger in-place using the provided config,
+// replacing its configuration, output writers, level, and other settings.
+// It also reconfigures the standard library log package.
+//
+// ⚠️ THREAD SAFETY WARNING: This function is NOT safe for concurrent use.
+// Ensure no other goroutines are using the global logger while calling Update.
+//
+// Example usage:
+//
+//	// Switch from development to production configuration
+//	prodConfig := logze.C(prodFile).WithLevel("warn").WithNoDiode()
+//	logze.Update(prodConfig, "environment", "production")
 func Update(cfg Config, fields ...any) {
 	log.Update(cfg, fields...)
 	SetStdLogger(log)
 }
 
-// SetLoggerForDefault sets priovded [Logger] with (key, value) pairs as writer for default Go logger and also
-// calls stdlog.SetFlags(0).
+// SetStdLogger configures the standard library log package to use the specified logger.
+//
+// This function redirects all standard library log output (log.Printf, log.Println, etc.)
+// to go through the provided logze logger. It also disables standard log formatting
+// flags since logze handles its own formatting.
+//
+// Optional fields can be provided to add context to all standard library log messages.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON("component", "stdlib")
+//	logze.SetStdLogger(logger, "source", "legacy_code")
+//
+//	// Now standard library log calls will include component and source fields
+//	log.Println("This goes through logze with context")
 func SetStdLogger(l Logger, fields ...any) {
 	stdlog.SetFlags(0)
 	stdlog.SetOutput(l.WithFields(fields...))
 	log = l
 }
 
-// WithFields returns [Logger] with applied fields, provided as (key, value) pairs, based on a global logger.
+// WithFields creates a logger with additional fields based on the global logger.
+//
+// This function returns a new logger instance that includes the specified fields
+// in all log messages. The global logger remains unchanged.
+//
+// Fields should be provided as alternating key-value pairs.
+//
+// Example usage:
+//
+//	requestLogger := logze.WithFields("request_id", "abc123", "user_id", 456)
+//	requestLogger.Info("Processing request") // Includes request_id and user_id
 func WithFields(fields ...any) Logger {
 	return log.WithFields(fields...)
 }
 
-// With is a shortcut for [WithFields].
+// With is a convenient shorthand for [WithFields].
+//
+// Example usage:
+//
+//	logger := logze.With("component", "auth", "operation", "login")
 func With(fields ...any) Logger {
 	return log.With(fields...)
 }
 
-// WithLevel returns [Logger] with applied log level, based on a global logger.
+// WithLevel creates a logger with a specific log level based on the global logger.
+//
+// This function returns a new logger instance with the specified minimum log level.
+// The global logger remains unchanged.
+//
+// Example usage:
+//
+//	debugLogger := logze.WithLevel("debug")
+//	debugLogger.Debug("This will be logged") // Even if global level is info
 func WithLevel(level string) Logger {
 	return log.WithLevel(level)
 }

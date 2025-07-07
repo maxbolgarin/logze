@@ -38,8 +38,25 @@ var LevelsAny = []any{
 	LevelTrace, LevelDebug, LevelInfo, LevelWarn, LevelError, LevelFatal, LevelDisabled,
 }
 
-// Config is using for initializing [Logger]. You should use [NewConfig] and With* methods instead of creating
-// a [Config] struct directly.
+// Config defines the configuration options for creating a [Logger] instance.
+//
+// Config uses the builder pattern - create an instance with [NewConfig] or [C], then chain
+// With* methods to configure specific options. Direct struct initialization is not recommended
+// as it bypasses default value handling and validation.
+//
+// The configuration covers all aspects of logging behavior including output destinations,
+// formatting, sampling, error handling, performance optimizations, and more.
+//
+// Example usage:
+//
+//	config := logze.NewConfig().
+//		WithConsoleJSON().
+//		WithLevel("info").
+//		WithSimpleErrorCounter().
+//		WithAddCaller()
+//	logger := logze.New(config, "service", "api")
+//
+// See individual With* methods for detailed configuration options.
 type Config struct {
 	// Writers is a list of writers where logger will log its data.
 	// Default value is [io.Discard].
@@ -109,71 +126,177 @@ type Config struct {
 	Sampler zerolog.Sampler
 }
 
-// NewConfig returns [Config] with provided list of [io.Writer], where [Logger] should logs its data.
+// NewConfig creates a new configuration instance with the specified output writers.
+//
+// This is the preferred way to create a Config instance. The writers specify where
+// log output will be sent - you can provide multiple writers to send logs to
+// multiple destinations simultaneously.
+//
+// If no writers are provided, logging will be disabled (outputs to io.Discard).
+// Use the With* methods to configure additional options like log level, formatting,
+// hooks, sampling, and performance settings.
+//
+// Example usage:
+//
+//	// Single writer (console JSON)
+//	config := NewConfig(os.Stderr)
+//
+//	// Multiple writers (file + console)
+//	logFile, _ := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+//	config := NewConfig(logFile, os.Stderr)
+//
+//	// No writers (disabled logging)
+//	config := NewConfig()
 func NewConfig(writers ...io.Writer) Config {
 	return Config{
 		Writers: writers,
 	}
 }
 
-// C is a shortcut for [NewConfig] that returns [Config] with provided list of [io.Writer], where [Logger] should logs its data.
+// C is a convenient shorthand for [NewConfig].
+//
+// This function provides the same functionality as NewConfig but with a shorter name
+// for more concise configuration chains.
+//
+// Example usage:
+//
+//	logger := logze.New(logze.C(os.Stderr).WithLevel("debug").WithAddCaller())
 func C(writers ...io.Writer) Config {
 	return NewConfig(writers...)
 }
 
-// New returns [Logger] with provided fields based on a [Config] from receiver.
+// New creates a logger instance using this configuration with optional default fields.
+//
+// This is a convenience method equivalent to calling logze.New(config, fields...).
+// It allows for more fluent configuration chains when you want to immediately
+// create a logger from a config.
+//
+// Fields should be provided as alternating key-value pairs and will be included
+// in every log message produced by the created logger.
+//
+// Example usage:
+//
+//	logger := logze.C(os.Stderr).
+//		WithLevel("info").
+//		WithAddCaller().
+//		New("service", "api", "version", "2.1.0")
 func (c Config) New(fields ...any) Logger {
 	return New(c, fields...)
 }
 
-// Logger returns [Logger] with provided fields based on a [Config] from receiver.
+// Logger is an alias for [Config.New] that creates a logger with optional fields.
+//
+// This method provides the same functionality as New but with a more explicit name
+// that clearly indicates a Logger instance will be created.
+//
+// Example usage:
+//
+//	logger := config.Logger("component", "database", "driver", "postgres")
 func (c Config) Logger(fields ...any) Logger {
 	return c.New(fields...)
 }
 
-// WithLevel returns [Config] with initialized level (in string format) provided as argument.
+// WithLevel configures the minimum log level for the logger.
+//
+// Valid levels are: "trace", "debug", "info", "warn", "error", "fatal", "disabled".
+// Messages below the specified level will be discarded for performance.
+// Level hierarchy: trace < debug < info < warn < error < fatal
+//
+// Example usage:
+//
+//	config := logze.C(os.Stderr).WithLevel("warn")
+//	// Only warn, error, and fatal messages will be logged
 func (c Config) WithLevel(level string) Config {
 	c.Level = level
 	return c
 }
 
-// WithTrace returns [Config] with trace level.
+// WithTrace configures the logger to log all messages (trace level and above).
+//
+// Trace is the most verbose level, typically used for detailed debugging
+// information. Use sparingly in production due to performance impact.
+//
+// Example usage:
+//
+//	config := logze.C(os.Stderr).WithTrace() // Logs everything
 func (c Config) WithTrace() Config {
 	c.Level = LevelTrace
 	return c
 }
 
-// WithDebug returns [Config] with debug level.
+// WithDebug configures the logger to log debug level and above messages.
+//
+// Debug level is useful for development and troubleshooting but typically
+// disabled in production for performance reasons.
+//
+// Example usage:
+//
+//	config := logze.C(os.Stderr).WithDebug() // Logs debug, info, warn, error, fatal
 func (c Config) WithDebug() Config {
 	c.Level = LevelDebug
 	return c
 }
 
-// WithInfo returns [Config] with info level.
+// WithInfo configures the logger to log info level and above messages.
+//
+// Info is the default and most common production log level, capturing
+// important application events without excessive verbosity.
+//
+// Example usage:
+//
+//	config := logze.C(os.Stderr).WithInfo() // Logs info, warn, error, fatal
 func (c Config) WithInfo() Config {
 	c.Level = LevelInfo
 	return c
 }
 
-// WithWarn returns [Config] with warn level.
+// WithWarn configures the logger to log warning level and above messages.
+//
+// Warning level captures potentially problematic situations that don't
+// prevent operation but should be investigated.
+//
+// Example usage:
+//
+//	config := logze.C(os.Stderr).WithWarn() // Logs warn, error, fatal only
 func (c Config) WithWarn() Config {
 	c.Level = LevelWarn
 	return c
 }
 
-// WithError returns [Config] with error level.
+// WithError configures the logger to log error level and above messages.
+//
+// Error level captures actual errors and fatal conditions only.
+// Use this for very quiet logging focused on problems.
+//
+// Example usage:
+//
+//	config := logze.C(os.Stderr).WithError() // Logs error, fatal only
 func (c Config) WithError() Config {
 	c.Level = LevelError
 	return c
 }
 
-// WithFatal returns [Config] with fatal level.
+// WithFatal configures the logger to log only fatal level messages.
+//
+// Fatal level captures only the most critical errors that cause
+// application termination. This creates very minimal logging.
+//
+// Example usage:
+//
+//	config := logze.C(os.Stderr).WithFatal() // Logs fatal only
 func (c Config) WithFatal() Config {
 	c.Level = LevelFatal
 	return c
 }
 
-// WithDisabled returns [Config] with disabled level.
+// WithDisabled completely disables logging.
+//
+// No log messages will be processed or output regardless of level.
+// Useful for testing or when logging needs to be completely turned off.
+//
+// Example usage:
+//
+//	config := logze.C().WithDisabled() // No logging at all
 func (c Config) WithDisabled() Config {
 	c.Level = LevelDisabled
 	return c
@@ -191,16 +314,41 @@ func (c Config) WithHooks(hooks ...zerolog.Hook) Config {
 	return c
 }
 
-// WithWriter returns [Config] with added provided [io.Writer] to a list of writers.
+// WithWriter adds an additional output writer to the logger configuration.
+//
+// This method appends the writer to the existing list of writers, allowing
+// logs to be sent to multiple destinations simultaneously. Each log message
+// will be written to all configured writers.
+//
+// Example usage:
+//
+//	var buffer bytes.Buffer
+//	config := logze.C(os.Stderr).WithWriter(&buffer)
+//	// Logs will go to both stderr and the buffer
 func (c Config) WithWriter(w io.Writer) Config {
 	c.Writers = append(c.Writers, w)
 	return c
 }
 
-// WithFile returns [Config] with a configurated output to a file.
-// It also returns a closer for a file and an error if it occurs.
-// You can provide a permission for a file as an argument.
-// Default permission is 0644.
+// WithFile configures logging output to a file with optional permissions.
+//
+// This method opens the specified file for append operations, creating it if
+// it doesn't exist. The file is added to the list of output writers.
+//
+// Returns the updated config, a closer for the file (you should call Close()
+// when done), and any error that occurred during file opening.
+//
+// Default file permissions are 0644 if not specified.
+//
+// Example usage:
+//
+//	config, closer, err := logze.C().WithFile("app.log", 0644)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	defer closer.Close()
+//
+//	logger := config.New("service", "api")
 func (c Config) WithFile(filename string, perm ...os.FileMode) (Config, io.Closer, error) {
 	if len(perm) == 0 {
 		perm = []os.FileMode{0644}
@@ -213,19 +361,46 @@ func (c Config) WithFile(filename string, perm ...os.FileMode) (Config, io.Close
 	return c, f, nil
 }
 
-// WithConsole returns [Config] with a configurated output to stderr in a pretty console format with colors.
-// This format may significantly slow down logging in an application compared to a default JSON format.
+// WithConsole configures colored console output for human-readable logging.
+//
+// This outputs logs to stderr in a pretty-printed format with colors and
+// human-readable timestamps. While great for development, this format is
+// significantly slower than JSON and should generally be avoided in production.
+//
+// Example output: "2:04PM INF User authenticated user_id=123"
+//
+// Example usage:
+//
+//	config := logze.C().WithConsole() // For development/debugging
 func (c Config) WithConsole() Config {
 	return c.WithWriter(getConsoleWriter(os.Stderr, true))
 }
 
-// WithConsoleNoColor returns [Config] a with configurated output to stderr in a pretty console format without colors.
-// This format may significantly slow down logging in an application compared to a default JSON format.
+// WithConsoleNoColor configures uncolored console output for human-readable logging.
+//
+// Similar to WithConsole but without ANSI color codes, suitable for environments
+// that don't support colored output or when colors are undesirable.
+//
+// ⚠️ Performance Warning: Console format is significantly slower than JSON.
+//
+// Example usage:
+//
+//	config := logze.C().WithConsoleNoColor() // For CI/CD or simple terminals
 func (c Config) WithConsoleNoColor() Config {
 	return c.WithWriter(getConsoleWriter(os.Stderr, false))
 }
 
-// WithConsoleJSON returns [Config] with a configurated output to stderr in a JSON format.
+// WithConsoleJSON configures structured JSON output to stderr.
+//
+// This is the recommended output format for production as it's fast, parseable,
+// and integrates well with log aggregation systems. Each log entry is a single
+// line of JSON.
+//
+// Example output: {"level":"info","time":"2023-11-20T18:48:14+03:00","message":"User authenticated","user_id":123}
+//
+// Example usage:
+//
+//	config := logze.C().WithConsoleJSON() // Recommended for production
 func (c Config) WithConsoleJSON() Config {
 	return c.WithWriter(os.Stderr)
 }
@@ -420,18 +595,60 @@ func getConsoleWriter(w io.Writer, color bool) zerolog.ConsoleWriter {
 	}
 }
 
-// ErrorCounter provides an interface to count logged errors. Use [Config.WithSimpleErrorCounter]
-// to use a simple error counter or [Config.WithErrorCounter] to use a custom one.
+// ErrorCounter provides an interface for tracking the number of errors logged.
+//
+// Implementations of ErrorCounter are called automatically whenever error-level
+// logging occurs (Err, Error, Fatal, Panic methods). This enables error tracking
+// for monitoring, alerting, or debugging purposes.
+//
+// The interface is intentionally simple to allow for various implementations:
+// simple counters, metrics systems, alerting systems, etc.
+//
+// Example custom implementation:
+//
+//	type MetricsErrorCounter struct {
+//		metric prometheus.Counter
+//	}
+//
+//	func (m *MetricsErrorCounter) Inc(err error) {
+//		m.metric.Inc()
+//		// Could also categorize by error type, etc.
+//	}
+//
+// Use [Config.WithSimpleErrorCounter] for a basic atomic counter or
+// [Config.WithErrorCounter] for custom implementations.
 type ErrorCounter interface {
 	Inc(err error)
 }
 
-// SimpleErrorCounter is a simple implementation of [ErrorCounter] with an atomic counter.
+// SimpleErrorCounter is a thread-safe error counter using atomic operations.
+//
+// This implementation provides a basic error counting mechanism suitable for
+// most use cases. The Count field can be read directly to get the current
+// error count, and all operations are atomic for safe concurrent use.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithSimpleErrorCounter()
+//	// ... application code that logs errors ...
+//
+//	if counter := logger.GetErrorCounter(); counter != nil {
+//		simple := counter.(*logze.SimpleErrorCounter)
+//		errorCount := simple.Count.Load()
+//		if errorCount > threshold {
+//			// Take action based on error count
+//		}
+//	}
 type SimpleErrorCounter struct {
 	Count atomic.Int64
 }
 
-// Inc increments the counter by 1.
+// Inc increments the error counter by 1.
+//
+// This method is called automatically by the logger whenever error-level
+// logging occurs. The increment operation is atomic and safe for concurrent use.
+// The error parameter is currently unused but provided for interface compatibility
+// and potential future enhancements.
 func (c *SimpleErrorCounter) Inc(error) {
 	c.Count.Add(1)
 }
