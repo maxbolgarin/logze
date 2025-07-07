@@ -598,7 +598,7 @@ func getConsoleWriter(w io.Writer, color bool) zerolog.ConsoleWriter {
 	return zerolog.ConsoleWriter{
 		Out:        w,
 		NoColor:    !color,
-		TimeFormat: time.DateTime,
+		TimeFormat: "2006-01-02 15:04:05",
 	}
 }
 
