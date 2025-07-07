@@ -55,9 +55,13 @@ type Config struct {
 	// UNIX Time is faster and smaller than most timestamps
 	TimeFieldFormat string
 
-	// Hook is a zerolog.Hook that will be used when creating logger.
+	// Hook is a [zerolog.Hook] that will be used when creating [Logger].
 	// Default value is nil.
 	Hook zerolog.Hook
+
+	// Hooks is a list of [zerolog.Hook] that will be used when creating [Logger].
+	// Default value is nil.
+	Hooks []zerolog.Hook
 
 	// ToIgnore is a list of messages that will be ignored.
 	// Default value is nil.
@@ -174,6 +178,12 @@ func (c Config) WithDisabled() Config {
 // WithHook returns [Config] with initialized [zerolog.Hook] provided as argument.
 func (c Config) WithHook(hook zerolog.Hook) Config {
 	c.Hook = hook
+	return c
+}
+
+// WithHooks returns [Config] with initialized list of [zerolog.Hook] provided as argument.
+func (c Config) WithHooks(hooks ...zerolog.Hook) Config {
+	c.Hooks = hooks
 	return c
 }
 

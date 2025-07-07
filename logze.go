@@ -98,6 +98,9 @@ func New(cfg Config, fields ...any) Logger {
 	}
 	l := temp.Logger().Level(level)
 
+	if len(cfg.Hooks) > 0 {
+		l = l.Hook(cfg.Hooks...)
+	}
 	if cfg.Hook != nil {
 		l = l.Hook(cfg.Hook)
 	}
