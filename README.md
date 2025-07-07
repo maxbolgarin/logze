@@ -95,19 +95,19 @@ logger.Error("Error occurred", "component", "database")
 ### Structured Fields
 
 ```go
-// Simple fields
-logger.Info("User action", "user_id", 123, "action", "login")
+// Prepare a new logger with additional fields
+logger := logger.With("user_id", 123, "action", "login")
+
+// Log with the prepared logger
+logger.Info("User action")
 
 // Complex data types
-logger.Info("Request processed", 
+logger.Info("Request processed",
 	"duration", time.Since(start),
 	"headers", map[string]string{"Content-Type": "application/json"},
 	"response_size", 1024,
 	"success", true,
 )
-
-// Arrays and slices
-logger.Info("Batch processed", "items", []string{"item1", "item2", "item3"})
 ```
 
 ### Error Logging
@@ -117,12 +117,16 @@ logger.Info("Batch processed", "items", []string{"item1", "item2", "item3"})
 err := errors.New("connection timeout")
 logger.Err(err, "Database connection failed", "host", "db.example.com")
 
-// Error with stack trace (requires WithStack configuration)
-logger := logze.New(logze.C().WithConsoleJSON().WithStackTrace())
-logger.Err(err, "Critical failure", "operation", "save_user")
+// Error with error object
+// Returns: {"level":"error","message":"Database connection failed","error":"connection timeout","host":"db.example.com"}
+logger.Error("Database connection failed", err, "host", "db.example.com")
 
 // Error without error object
 logger.Error("Validation failed", "field", "email", "reason", "invalid format")
+
+// Error with stack trace (requires WithStack configuration)
+logger := logze.New(logze.C().WithConsoleJSON().WithStackTrace())
+logger.Err(err, "Critical failure", "operation", "save_user")
 ```
 
 ### Formatted Logging

@@ -423,19 +423,24 @@ func (l Logger) WithLevel(level string) Logger {
 	return l
 }
 
-// WithStack creates a new logger with stack trace collection enabled or disabled.
+// WithStack creates a new logger with stack trace collection enabled.
 //
 // When enabled, error logging methods will automatically collect and include
 // stack traces in the log output (for Error logs). This is useful for debugging but adds
 // performance overhead.
+//
+// If optional stackTrace argument is false, the stack trace will not be collected.
 //
 // Example usage:
 //
 //	logger := logze.NewConsoleJSON().WithStack(true)
 //	logger.Err(err, "Database connection failed")
 //	// Output will include stack trace information
-func (l Logger) WithStack(stackTrace bool) Logger {
-	l.stackTrace = stackTrace
+func (l Logger) WithStack(stackTrace ...bool) Logger {
+	l.stackTrace = true
+	if len(stackTrace) > 0 && !stackTrace[0] {
+		l.stackTrace = false
+	}
 	return l
 }
 
