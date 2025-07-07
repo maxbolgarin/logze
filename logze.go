@@ -328,7 +328,7 @@ func (l Logger) Fatal(v ...any) {
 // Fatalf logs a formatted message in fatal level, then calls os.Exit(1).
 func (l Logger) Fatalf(format string, args ...any) {
 	l.incErrorCounter(fmt.Errorf(format, args...))
-	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
+	l.logf(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	os.Exit(1)
 }
 
@@ -358,7 +358,7 @@ func (l Logger) Panic(v ...any) {
 // Panicf logs a formatted message in fatal level, then calls panic().
 func (l Logger) Panicf(format string, args ...any) {
 	l.incErrorCounter(fmt.Errorf(format, args...))
-	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
+	l.logf(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	panic(fmt.Sprintf(format, args...))
 }
 
