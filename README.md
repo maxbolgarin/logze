@@ -1,8 +1,9 @@
 # logze — Structural logging with zerolog efficiency and slog interface
 
-[![Go Version][version-img]][doc] [![GoDoc][doc-img]][doc] [![Build][ci-img]][ci] [![GoReport][report-img]][report]
+[![Go Version][version-img]][doc] [![GoDoc][doc-img]][doc] [![Build][ci-img]][ci] [![Coverage][coverage-img]][coverage] [![GoReport][report-img]][report]
 
 A high-performance structured logging library for Go that combines the efficiency of [zerolog](https://github.com/rs/zerolog) with the simplicity of [slog](https://pkg.go.dev/golang.org/x/exp/slog). Write clean, readable logging code that performs exceptionally well.
+
 
 ## ✨ Why Choose logze?
 
@@ -27,6 +28,7 @@ go get -u github.com/maxbolgarin/logze/v2
 - 🎯 Zero allocations for most operations
 - 📈 High-throughput with optional non-blocking I/O
 
+
 ## 📖 Table of Contents
 
 - [Quick Start](#quick-start)
@@ -38,18 +40,17 @@ go get -u github.com/maxbolgarin/logze/v2
   - [Error Logging](#error-logging)
   - [Formatted Logging](#formatted-logging)
   - [Conditional Logging](#conditional-logging)
+  - [Sampling](#sampling)
 - [Configuration](#configuration)
   - [Output Configuration](#output-configuration)
   - [Level Configuration](#level-configuration)
   - [Advanced Features](#advanced-features)
 - [Global Logger](#global-logger)
-- [Performance Considerations](#performance-considerations)
 - [Pros and Cons](#pros-and-cons)
 - [Benchmarks](#benchmarks)
-- [Common Patterns](#common-patterns)
-- [Troubleshooting](#troubleshooting)
 - [Migration Guide](#migration-guide)
 - [Contributing](#contributing)
+
 
 ## ⚡ Quick Start
 
@@ -121,12 +122,13 @@ logger.Err(err, "Database connection failed", "host", "db.example.com")
 // Returns: {"level":"error","message":"Database connection failed","error":"connection timeout","host":"db.example.com"}
 logger.Error("Database connection failed", err, "host", "db.example.com")
 
-// Error without error object
-logger.Error("Validation failed", "field", "email", "reason", "invalid format")
+// Error with stack trace and no error object
+logger.WithStack().Error("Validation failed")
 
-// Error with stack trace (requires WithStack configuration)
+// Logging with stack trace
 logger := logze.New(logze.C().WithConsoleJSON().WithStackTrace())
 logger.Err(err, "Critical failure", "operation", "save_user")
+
 ```
 
 ### Formatted Logging
@@ -152,6 +154,20 @@ logger.ErrorIf(err != nil, "Operation failed", "error", err)
 logger.DebugIf(isVerbose, "Detailed state", "state", expensiveStateCalculation())
 ```
 
+### Sampling
+
+```go
+// Sample 10% of debug logs
+logger := logze.New(logze.C().WithConsoleJSON().WithPercentageSampler(0.1, logze.LevelDebug))
+
+// Allow only 100 debug logs per second
+logger := logze.New(logze.C().WithConsoleJSON().WithMaxSampler(100, time.Second, logze.LevelDebug))
+
+// Pass 100 logs per second and then allow 10% of all logs
+logger := logze.New(logze.C().WithConsoleJSON().WithBurstSampler(0.1, 100, time.Second))
+```
+
+
 ## ⚙️ Configuration
 
 ### Output Configuration
@@ -172,7 +188,7 @@ logger := logze.New(config)
 
 // Multiple outputs
 var fileWriter io.Writer // your file writer
-logger := logze.New(logze.C(os.Stdout, fileWriter).WithConsole())
+logger := logze.New(logze.C(fileWriter).WithConsole())
 
 // Custom writer
 logger := logze.New(logze.C(customWriter))
@@ -182,7 +198,7 @@ logger := logze.New(logze.C(customWriter))
 
 ```go
 // Set minimum log level
-logger := logze.New(logze.C().WithLevel("warn")) // Only warn, error, fatal
+logger := logze.New(logze.C().WithLevel(logze.LevelWarn)) // Only warn, error, fatal
 
 // Level-specific configuration
 logger := logze.New(logze.C().WithDebug()) // Debug and above
@@ -197,13 +213,12 @@ logger := logze.New(logze.C().WithDisabled())
 
 ```go
 config := logze.NewConfig().
-    WithLevel("info").                              // Set log level
+    WithLevel(logze.LevelInfo).                     // Set log level
     WithAddCaller().                               // Include caller info
-    WithStack(true).                               // Enable stack traces
+    WithStackTrace().                               // Enable stack traces
     WithSimpleErrorCounter().                      // Count errors
     WithToIgnore("health", "ping").               // Filter messages
     WithTimeFieldFormat(time.RFC3339).           // Custom time format
-    WithDiodeSize(1000).                         // Buffer size
     WithNoDiode()                                // Disable buffering
 
 logger := logze.New(config, "service", "api", "version", "2.1.0")
@@ -229,38 +244,6 @@ requestLogger.Info("Processing request")
 logze.Update(logze.C().WithLevel("debug")) // Enable debug logging
 ```
 
-## ⚡ Performance Considerations
-
-### Use Diode for High Throughput
-```go
-// Default: non-blocking writes (recommended for production)
-logger := logze.New(logze.C().WithConsoleJSON())
-
-// Synchronous writes (use for critical logging)
-logger := logze.New(logze.C().WithConsoleJSON().WithNoDiode())
-
-// Custom diode configuration
-logger := logze.New(logze.C().
-	WithDiodeSize(10000).                    // Buffer size
-	WithDiodePollingInterval(10*time.Millisecond). // Flush interval
-	WithDiodeAlert(func(missed int) {        // Handle dropped messages
-		fmt.Printf("Dropped %d log messages\n", missed)
-	}))
-```
-
-### Avoid Expensive Operations
-```go
-// ❌ Bad: expensive operation always executed
-logger.Debug("State dump", "state", expensiveStateCapture())
-
-// ✅ Good: conditional execution
-logger.DebugIf(debugEnabled, "State dump", "state", expensiveStateCapture())
-
-// ✅ Good: check level first
-if logger.GetLevel() <= logze.LevelDebug {
-	logger.Debug("State dump", "state", expensiveStateCapture())
-}
-```
 
 ## ✅ Pros and Cons
 
@@ -269,11 +252,8 @@ if logger.GetLevel() <= logze.LevelDebug {
 - **🚀 High Performance**: 3x faster than `slog`, leveraging `zerolog`'s efficient engine
 - **📝 Clean Interface**: Simple, readable logging calls with structured fields
 - **🔧 Flexible Configuration**: Extensive configuration options for any use case
-- **⚡ Non-blocking I/O**: Optional diode buffering prevents I/O blocking
 - **🎯 Zero Allocations**: Most operations don't allocate memory
 - **🔄 Easy Migration**: Compatible interface with `slog` patterns
-- **🧪 Testing Support**: Built-in no-op logger and testing utilities
-- **📊 Monitoring**: Built-in error counting and metrics support
 
 ### Cons
 
@@ -281,6 +261,7 @@ if logger.GetLevel() <= logze.LevelDebug {
 - **🧠 Learning Curve**: Advanced features (diode, sampling) may be complex for beginners
 - **💾 Message Loss Risk**: Default diode buffering can drop messages under extreme load
 - **🎨 Console Performance**: Text/console output is significantly slower than JSON
+
 
 ## 📊 Benchmarks
 
@@ -314,105 +295,6 @@ BenchmarkLogzeInfoConsole-8     704,247   3,366 ns/op   1,922 B/op   51 allocs/o
 BenchmarkSLogInfoConsole-8    4,058,850     588 ns/op       0 B/op    0 allocs/op  (-82%)
 ```
 
-**Key Takeaways:**
-- 📈 `logze` is **3x faster** than `slog` for JSON output
-- ⚡ Only **15% overhead** compared to raw `zerolog`
-- 🎨 For console output, `slog` is faster (but less structured)
-- 🚀 Zero allocations for most operations
-
-## 🔧 Common Patterns
-
-### Request Logging
-```go
-func handleRequest(w http.ResponseWriter, r *http.Request) {
-	requestID := generateRequestID()
-	logger := logze.With("request_id", requestID, "method", r.Method, "path", r.URL.Path)
-	
-	start := time.Now()
-	logger.Info("Request started")
-	
-	// ... handle request ...
-	
-	logger.Info("Request completed", "duration", time.Since(start), "status", 200)
-}
-```
-
-### Error Handling with Context
-```go
-func processData(ctx context.Context, data []byte) error {
-	logger := logze.GetFromContext(ctx).With("operation", "process_data", "size", len(data))
-	
-	if err := validateData(data); err != nil {
-		logger.Err(err, "Data validation failed", "validation_step", "schema_check")
-		return fmt.Errorf("validation failed: %w", err)
-	}
-	
-	logger.Info("Data processing completed", "processed_items", len(data))
-	return nil
-}
-```
-
-### Sampling for High-Volume Logs
-```go
-// Sample debug logs to 10% to reduce volume
-logger := logze.New(logze.C().
-	WithConsoleJSON().
-	WithLevel("debug").
-	WithPercentageSampler(0.1, "debug")) // Only 10% of debug logs
-
-// Or limit to max 100 debug logs per second
-logger := logze.New(logze.C().
-	WithConsoleJSON().
-	WithLevel("debug").
-	WithMaxSampler(100, time.Second, "debug"))
-```
-
-## 🔍 Troubleshooting
-
-### Missing Log Messages
-```go
-// Ensure diode is flushed before exit
-logger := logze.NewConsoleJSON()
-defer logger.Close() // Flush diode buffer
-
-// Or disable diode for critical logs
-logger := logze.New(logze.C().WithConsoleJSON().WithNoDiode())
-```
-
-### Performance Issues
-```go
-// ❌ Avoid expensive console output in production
-logger := logze.New(logze.C().WithConsole()) // Slow!
-
-// ✅ Use JSON output for production
-logger := logze.New(logze.C().WithConsoleJSON()) // Fast!
-
-// ✅ Or use file output
-config, closer, _ := logze.C().WithFile("app.log")
-defer closer.Close()
-logger := logze.New(config)
-```
-
-### Testing and Development
-```go
-// Disable logging in tests
-func TestSomething(t *testing.T) {
-	logger := logze.Nop() // No-op logger
-	// ... test code ...
-}
-
-// Capture logs for testing
-func TestLogging(t *testing.T) {
-	var buf bytes.Buffer
-	logger := logze.New(logze.C(&buf).WithNoDiode())
-	
-	logger.Info("test message", "key", "value")
-	
-	output := buf.String()
-	assert.Contains(t, output, "test message")
-}
-```
-
 ## 🔄 Migration Guide
 
 ### From `slog`
@@ -421,9 +303,9 @@ func TestLogging(t *testing.T) {
 slog.Info("User created", "user_id", 123, "email", "user@example.com")
 slog.Error("Database error", "error", err, "query", query)
 
-// After (logze) - nearly identical!
+// After (logze) - it's identical!
 logze.Info("User created", "user_id", 123, "email", "user@example.com")
-logze.Err(err, "Database error", "query", query) // Enhanced error handling
+logze.Error("Database error", "error", err, "query", query) // Enhanced error handling
 ```
 
 ### From `zerolog`
@@ -471,3 +353,5 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 [ci]: https://github.com/maxbolgarin/logze/actions
 [report-img]: https://goreportcard.com/badge/github.com/maxbolgarin/logze
 [report]: https://goreportcard.com/report/github.com/maxbolgarin/logze
+[coverage-img]: https://codecov.io/gh/maxbolgarin/logze/branch/main/graph/badge.svg
+[coverage]: https://codecov.io/gh/maxbolgarin/logze
