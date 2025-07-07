@@ -102,6 +102,16 @@ func GetErrorCounter() ErrorCounter {
 	return log.GetErrorCounter()
 }
 
+// CloseDiode closes the underlying [diode.Writer] if it is used.
+func CloseDiode() error {
+	return log.CloseDiode()
+}
+
+// Close closes the underlying [diode.Writer] if it is used.
+func Close() error {
+	return log.Close()
+}
+
 // Trace logs a message in trace level adding provided fields and information about method caller
 // using a global logger.
 func Trace(msg string, fields ...any) {

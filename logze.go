@@ -23,6 +23,8 @@ type Logger struct {
 	toIgnore   []string
 	stackTrace bool
 	inited     bool
+
+	diodeWriter *diode.Writer
 }
 
 // New returns a new [Logger] with provided config and fields.
@@ -66,6 +68,8 @@ func New(cfg Config, fields ...any) Logger {
 	if len(cfg.Writers) > 1 {
 		output = zerolog.MultiLevelWriter(cfg.Writers...)
 	}
+
+	var diodeWriter *diode.Writer
 	if !cfg.NoDiode {
 		if cfg.DiodeSize == 0 {
 			cfg.DiodeSize = DefaultDiodeSize
@@ -83,7 +87,9 @@ func New(cfg Config, fields ...any) Logger {
 		}
 		// To fix problem of blocking goroutine when writing in Stderr
 		// https://github.com/cloudfoundry/go-diodes
-		output = diode.NewWriter(output, cfg.DiodeSize, cfg.DiodePollingInterval, cfg.DiodeAlertFunc)
+		w := diode.NewWriter(output, cfg.DiodeSize, cfg.DiodePollingInterval, cfg.DiodeAlertFunc)
+		output = w
+		diodeWriter = &w
 	}
 
 	temp := zerolog.New(output).With().Timestamp().Fields(fields)
@@ -99,11 +105,12 @@ func New(cfg Config, fields ...any) Logger {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
 	return Logger{
-		l:          l,
-		toIgnore:   cfg.ToIgnore,
-		errCounter: cfg.ErrorCounter,
-		stackTrace: cfg.StackTrace,
-		inited:     true,
+		l:           l,
+		toIgnore:    cfg.ToIgnore,
+		errCounter:  cfg.ErrorCounter,
+		stackTrace:  cfg.StackTrace,
+		inited:      true,
+		diodeWriter: diodeWriter,
 	}
 }
 
@@ -123,6 +130,19 @@ func NewConsoleJSON(fields ...any) Logger {
 // Nop returns a new [Logger] with no logging.
 func Nop() Logger {
 	return Logger{l: zerolog.Nop()}
+}
+
+// CloseDiode closes the underlying [diode.Writer] if it is used.
+func (l Logger) CloseDiode() error {
+	if l.diodeWriter != nil {
+		return l.diodeWriter.Close()
+	}
+	return nil
+}
+
+// Close closes the underlying [diode.Writer] if it is used.
+func (l Logger) Close() error {
+	return l.CloseDiode()
 }
 
 // Update replaces underlying logger with a new one created using provided config and fields.
