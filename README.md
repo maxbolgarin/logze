@@ -1,4 +1,4 @@
-# logze — Structural logging with zerolog efficiency and slog interface
+# logze — structured logging with zerolog efficiency
 
 [![Go Version][version-img]][doc] [![GoDoc][doc-img]][doc] [![Build][ci-img]][ci] [![Coverage][coverage-img]][coverage] [![GoReport][report-img]][report]
 
@@ -8,6 +8,9 @@ A high-performance structured logging library for Go that combines the efficienc
 ## ✨ Why Choose logze?
 
 **Simple, Clean Interface:**
+
+The following examples show the same logging operation in both zerolog and logze:
+
 ```go
 // Zerolog example:
 log.Error().Err(err).Str("address", "127.0.0.1").Int("retry", n).Msg("cannot start server")
@@ -15,6 +18,8 @@ log.Error().Err(err).Str("address", "127.0.0.1").Int("retry", n).Msg("cannot sta
 // Logze example:
 logze.Err(err, "cannot start server", "address", "127.0.0.1", "retry", n)
 ```
+
+**Why this matters:** Logze eliminates the need to remember multiple method names (`.Str()`, `.Int()`, `.Msg()`) and chain method calls. Instead, you use one simple method call with alternating key-value pairs, making the code more readable and less error-prone.
 
 ## 📦 Installation
 
@@ -54,6 +59,8 @@ go get -u github.com/maxbolgarin/logze/v2
 
 ## ⚡ Quick Start
 
+This example demonstrates the core features of logze in just a few lines:
+
 ```go
 package main
 
@@ -78,9 +85,24 @@ func main() {
 }
 ```
 
+**What this does:**
+1. **Creates a JSON logger** that outputs structured logs to stderr (ideal for production)
+2. **Logs structured information** with key-value pairs that are easy to parse and search
+3. **Handles error logging** efficiently with both the error object and contextual information
+4. **Demonstrates global logging** for cases where you don't want to pass logger instances around
+
+**Expected output:**
+```json
+{"level":"info","message":"Application started","version":"1.0.0","port":8080,"time":"2024-01-15T10:30:00Z"}
+{"level":"error","message":"Failed to connect","error":"database connection failed","host":"localhost","retry":3,"time":"2024-01-15T10:30:01Z"}
+{"level":"info","message":"Processing request","user_id":12345,"action":"create_post","time":"2024-01-15T10:30:02Z"}
+```
+
 ## 📝 Usage Examples
 
 ### Basic Logging
+
+This example shows how to log at different levels with various data types:
 
 ```go
 logger := logze.New(logze.C().WithConsole().WithTrace())
@@ -93,7 +115,17 @@ logger.Warn("Warning message", "disk_usage", 85.5)
 logger.Error("Error occurred", "component", "database")
 ```
 
+**Explanation:**
+- **Trace**: Most verbose level, typically used for detailed debugging (includes caller information)
+- **Debug**: Detailed information for diagnosing problems
+- **Info**: General operational messages about what the application is doing
+- **Warn**: Potentially harmful situations that should be investigated
+- **Error**: Error events that still allow the application to continue
+
+
 ### Structured Fields
+
+This example demonstrates different ways to add structured data to your logs:
 
 ```go
 // Prepare a new logger with additional fields
@@ -103,7 +135,7 @@ logger := logger.With("user_id", 123, "action", "login")
 logger.Info("User action")
 
 // Complex data types
-logger.Info("Request processed",
+logger.Info("Request processed", 
 	"duration", time.Since(start),
 	"headers", map[string]string{"Content-Type": "application/json"},
 	"response_size", 1024,
@@ -111,7 +143,25 @@ logger.Info("Request processed",
 )
 ```
 
+**What each approach does:**
+
+1. **Prepared logger with `.With()`**: Creates a new logger instance that automatically includes specified fields in every log message. This is perfect for request-scoped logging where you want to include request ID, user ID, etc. in all related logs.
+
+2. **Complex data types**: Shows how logze automatically handles different Go types (supports all types that `zerolog` supports):
+   - `time.Duration` → formatted as readable duration
+   - `map[string]string` → serialized as JSON object
+   - `int` → numeric value
+   - `bool` → boolean value
+
+**Expected output:**
+```json
+{"level":"info","message":"User action","user_id":123,"action":"login","time":"2024-01-15T10:30:00Z"}
+{"level":"info","message":"Request processed","duration":"150ms","headers":{"Content-Type":"application/json"},"response_size":1024,"success":true,"time":"2024-01-15T10:30:01Z"}
+```
+
 ### Error Logging
+
+This example shows different patterns for logging errors:
 
 ```go
 // Basic error logging
@@ -128,10 +178,22 @@ logger.WithStack().Error("Validation failed")
 // Logging with stack trace
 logger := logze.New(logze.C().WithConsoleJSON().WithStackTrace())
 logger.Err(err, "Critical failure", "operation", "save_user")
-
 ```
 
+**Different error logging patterns:**
+
+1. **`logger.Err(err, message, fields...)`**: Best practice for error logging. Automatically includes the error in the log entry and increments error counters if configured.
+
+2. **`logger.Error(message, error, fields...)`**: Alternative syntax where you can mix the error with other fields. The error is automatically detected and properly formatted.
+
+3. **`logger.WithStack().Error(message)`**: Captures and includes stack trace information, useful for debugging but has performance impact.
+
+4. **Global stack trace configuration**: When you configure the logger with `WithStackTrace()`, all error logs from this logger instance automatically include stack traces.
+
+
 ### Formatted Logging
+
+This example demonstrates printf-style formatting combined with structured fields:
 
 ```go
 // Printf-style formatting with structured fields
@@ -143,18 +205,30 @@ logger.Debugf("User %s (ID: %d) performed action: %v", username, userID, action,
 	"timestamp", time.Now(), "ip", clientIP)
 ```
 
+**How formatted logging works:**
+
+1. **Format string processing**: The first part of the arguments is used for printf-style formatting
+2. **Structured fields**: Any remaining arguments after the format placeholders become structured key-value pairs
+3. **Best of both worlds**: You get readable formatted messages plus searchable structured data
+
+**Example breakdown:**
+- `"Processing %d items in %s"` with `count=100, duration="10s"` becomes `"Processing 100 items in 10s"`
+- `"batch_id", batchID` becomes a structured field in the JSON output
+- This gives you both human-readable messages and machine-parseable data
+
 ### Conditional Logging
+
+This example shows how to avoid expensive operations when logging is disabled:
 
 ```go
 // Log only when condition is true
 logger.InfoIf(debugMode, "Debug mode enabled", "level", "verbose")
 logger.ErrorIf(err != nil, "Operation failed", "error", err)
-
-// Useful for performance-sensitive code
-logger.DebugIf(isVerbose, "Detailed state", "state", expensiveStateCalculation())
 ```
 
 ### Sampling
+
+This example demonstrates how to reduce log volume in high-throughput applications:
 
 ```go
 // Sample 10% of debug logs
@@ -167,10 +241,26 @@ logger := logze.New(logze.C().WithConsoleJSON().WithMaxSampler(100, time.Second,
 logger := logze.New(logze.C().WithConsoleJSON().WithBurstSampler(0.1, 100, time.Second))
 ```
 
+**Sampling strategies explained:**
+
+1. **Percentage Sampling**: Randomly samples X% of logs at specified levels
+   - Use when you want a representative sample of all logs
+   - Good for getting a statistical overview without overwhelming log storage
+
+2. **Max Sampling**: Allows up to X logs per time period, then drops the rest
+   - Use to prevent log flooding from busy code paths
+   - Guarantees you won't exceed storage/bandwidth limits
+
+3. **Burst Sampling**: Allows X logs immediately, then switches to percentage sampling
+   - Use for bursty applications that need immediate logs but should throttle under sustained load
+   - Combines the benefits of both approaches
+
 
 ## ⚙️ Configuration
 
 ### Output Configuration
+
+These examples show different ways to configure where your logs are written:
 
 ```go
 // Console output (development)
@@ -194,7 +284,28 @@ logger := logze.New(logze.C(fileWriter).WithConsole())
 logger := logze.New(logze.C(customWriter))
 ```
 
+**Output format explanations:**
+
+1. **`WithConsole()`**: Human-readable colored output, perfect for development
+   - Example: `2:04PM INF User logged in user_id=123 action=login`
+   - **Pros**: Easy to read during development
+   - **Cons**: Slow performance, not machine-parseable
+
+2. **`WithConsoleJSON()`**: JSON output to stderr, ideal for production
+   - Example: `{"level":"info","message":"User logged in","user_id":123,"time":"2024-01-15T14:04:00Z"}`
+   - **Pros**: Fast, machine-parseable, works with log aggregators
+   - **Cons**: Not human-readable
+
+3. **File output**: Writes logs to files with automatic rotation support
+   - **Use case**: When you need persistent logs or can't use stderr
+   - **Remember**: Always defer `closer.Close()` to ensure logs are flushed
+
+4. **Multiple outputs**: Send logs to multiple destinations simultaneously
+   - **Use case**: Log to both files and console, or send to multiple log aggregators
+
 ### Level Configuration
+
+These examples show how to control which log levels are output:
 
 ```go
 // Set minimum log level
@@ -211,22 +322,49 @@ logger := logze.New(logze.C().WithDisabled())
 
 ### Advanced Features
 
+This example shows advanced configuration options:
+
 ```go
 config := logze.NewConfig().
-    WithLevel(logze.LevelInfo).                     // Set log level
-    WithAddCaller().                               // Include caller info
-    WithStackTrace().                               // Enable stack traces
-    WithSimpleErrorCounter().                      // Count errors
-    WithToIgnore("health", "ping").               // Filter messages
-    WithTimeFieldFormat(time.RFC3339).           // Custom time format
-    WithNoDiode()                                // Disable buffering
+	WithLevel(logze.LevelInfo).                     // Set log level
+	WithAddCaller().                               // Include caller info
+	WithStackTrace().                               // Enable stack traces
+	WithSimpleErrorCounter().                      // Count errors
+	WithToIgnore("health", "ping").               // Filter messages
+	WithTimeFieldFormat(time.RFC3339).           // Custom time format
+	WithNoDiode()                                // Disable buffering
 
 logger := logze.New(config, "service", "api", "version", "2.1.0")
 ```
 
+**Advanced features explained:**
+
+1. **`WithAddCaller()`**: Adds file name and line number to logs
+   - **Use case**: Debugging when you need to know exactly where logs come from
+   - **Performance impact**: Slight overhead due to runtime reflection
+
+2. **`WithStackTrace()`**: Automatically includes stack traces in error logs
+   - **Use case**: Debugging complex error conditions
+   - **Performance impact**: Significant overhead, use sparingly
+
+3. **`WithSimpleErrorCounter()`**: Tracks how many errors have been logged
+   - **Use case**: Monitoring and alerting based on error rates
+   - **Access**: Use `logger.GetErrorCounter()` to get current count
+
+4. **`WithToIgnore()`**: Filters out log messages containing specified strings
+   - **Use case**: Reduce noise from health checks, monitoring pings, etc.
+   - **Example**: Logs containing "health" or "ping" won't be output
+
+5. **`WithNoDiode()`**: Disables async buffering for synchronous logging
+   - **Use case**: When you need guaranteed log delivery (e.g., before program exit)
+   - **Trade-off**: Better reliability but worse performance
+
+6. **Default fields**: `"service", "api", "version", "2.1.0"` are added to every log
+   - **Use case**: Consistent metadata across all logs from this logger instance
+
 ## 🌍 Global Logger
 
-For convenience, use the global logger throughout your application:
+These examples show how to use the global logger for convenience:
 
 ```go
 // Initialize once at application start
@@ -244,6 +382,91 @@ requestLogger.Info("Processing request")
 logze.Update(logze.C().WithLevel("debug")) // Enable debug logging
 ```
 
+**Global logger patterns:**
+
+1. **`logze.Init()`**: Sets up the global logger with configuration and default fields
+   - **Best practice**: Call once during application startup
+   - **Use case**: When you don't want to pass logger instances everywhere
+
+2. **Direct global calls**: `logze.Info()`, `logze.Err()`, etc.
+   - **Advantage**: Simple, no need to pass logger instances
+   - **Disadvantage**: Less flexible than instance loggers
+
+3. **`logze.With()`**: Creates a new logger with additional fields
+   - **Use case**: Request-scoped logging where you want consistent fields
+   - **Pattern**: Create once per request, use throughout request handling
+
+4. **`logze.Update()`**: Changes global logger configuration at runtime
+   - **Use case**: Enabling debug logging for troubleshooting without restart
+   - **Warning**: Affects all subsequent logging calls globally
+   
+  
+## 🔄 Migration Guide
+
+### From `slog`
+
+The migration from slog is nearly seamless:
+
+```go
+// Before (slog)
+slog.Info("User created", "user_id", 123, "email", "user@example.com")
+slog.Error("Database error", "error", err, "query", query)
+
+// After (logze) - it's identical!
+logze.Info("User created", "user_id", 123, "email", "user@example.com")
+logze.Error("Database error", "error", err, "query", query) // Enhanced error handling
+```
+
+**Migration benefits:**
+- **No API changes**: The basic logging calls are identical
+- **Enhanced error handling**: Better error object processing and counting
+- **Performance improvement**: 3x faster than slog with same interface
+- **Additional features**: Caller info, stack traces, sampling, etc.
+
+### From `zerolog`
+
+Logze simplifies `zerolog` usage:
+
+```go
+// Before (zerolog)
+log.Info().Str("user_id", "123").Str("email", "user@example.com").Msg("User created")
+log.Error().Err(err).Str("query", query).Msg("Database error")
+
+// After (logze) - much cleaner!
+logze.Info("User created", "user_id", "123", "email", "user@example.com")
+logze.Err(err, "Database error", "query", query)
+```
+
+**Migration advantages:**
+- **Simpler syntax**: No method chaining or type-specific methods
+- **Same performance**: Only 15% overhead compared to raw zerolog
+- **Fewer mistakes**: No forgotten `.Msg()` calls or wrong type methods
+- **Better readability**: Clear intent with single method calls
+
+### From Standard Library
+
+Transform printf-style logging into structured logging:
+
+```go
+// Before (standard log)
+log.Printf("User %s created with ID %d", email, userID)
+
+// After (logze) - structured and faster!
+logze.Infof("User %s created with ID %d", email, userID)
+// Or better yet:
+logze.Info("User created", "email", email, "user_id", userID)
+```
+
+**Why structured logging is better:**
+- **Searchable**: Query logs by specific field values
+- **Aggregatable**: Calculate metrics from log data
+- **Consistent**: Standardized format across different log sources
+- **Future-proof**: Easy to parse and process programmatically
+
+**Migration strategy:**
+1. **Phase 1**: Replace `log.Printf` with `logze.Infof` (minimal changes)
+2. **Phase 2**: Convert to structured logging with key-value pairs
+3. **Phase 3**: Add appropriate log levels and error handling
 
 ## ✅ Pros and Cons
 
@@ -264,71 +487,67 @@ logze.Update(logze.C().WithLevel("debug")) // Enable debug logging
 
 
 ## 📊 Benchmarks
+Thoughts from benchmarks:
+* `logze` is about 3 times faster than `slog` and for 15% slower than `zerolog`
+* format methods like `logze.Infof` or `Msgf` doesn't add big overhead (only 30% slower and +1 alloc)
+* stack trace is very slow in `logze` and `zerolog`
+* console writer is very slow in `logze` and `zerolog` and should be used only in development (that the case when slog wins over `logze` - if you want to use text writer in production)
+* `logze.Err` is slightly faster that `logze.Error`
 
-Performance comparison on Apple M1 Pro:
 
-### Basic Info Logging (message + 2 fields)
-```
-BenchmarkZerologInfo-8     14,365,629    151.3 ns/op    0 B/op    0 allocs/op
-BenchmarkLogzeInfo-8       13,851,320    171.5 ns/op    0 B/op    0 allocs/op  (+13%)
-BenchmarkSLogInfo-8         4,491,897    533.2 ns/op    0 B/op    0 allocs/op  (+252%)
-```
+Here is result of `go test -bench=. -benchmem -benchtime=2s`:
 
-### Formatted Logging (printf-style + 2 fields)
 ```
-BenchmarkZerologInfoFormat-8  11,758,495  207.0 ns/op   24 B/op   1 allocs/op
-BenchmarkLogzeInfoFormat-8    10,047,972  239.8 ns/op   24 B/op   1 allocs/op  (+16%)
-BenchmarkSLogInfoFormat-8      4,026,775  601.0 ns/op   24 B/op   1 allocs/op  (+190%)
-```
-
-### Error Logging (error + 2 fields)
-```
-BenchmarkZerologError-8    13,900,646    173.6 ns/op    0 B/op    0 allocs/op
-BenchmarkLogzeError-8      10,827,030    221.7 ns/op    0 B/op    0 allocs/op  (+28%)
-BenchmarkSLogError-8        3,757,587    635.7 ns/op    0 B/op    0 allocs/op  (+266%)
+goos: darwin
+goarch: arm64
+cpu: Apple M1 Pro
 ```
 
-### Console Output (development)
-```
-BenchmarkZerologInfoConsole-8   682,558   3,306 ns/op   1,922 B/op   51 allocs/op
-BenchmarkLogzeInfoConsole-8     704,247   3,366 ns/op   1,922 B/op   51 allocs/op  (+2%)
-BenchmarkSLogInfoConsole-8    4,058,850     588 ns/op       0 B/op    0 allocs/op  (-82%)
-```
-
-## 🔄 Migration Guide
-
-### From `slog`
-```go
-// Before (slog)
-slog.Info("User created", "user_id", 123, "email", "user@example.com")
-slog.Error("Database error", "error", err, "query", query)
-
-// After (logze) - it's identical!
-logze.Info("User created", "user_id", 123, "email", "user@example.com")
-logze.Error("Database error", "error", err, "query", query) // Enhanced error handling
+Logging `Info` and two fields:
+```text
+BenchmarkZerologInfo-8                  14365629               151.3 ns/op             0 B/op          0 allocs/op
+BenchmarkLogzeInfo-8                    13851320               171.5 ns/op             0 B/op          0 allocs/op
+BenchmarkSLogInfo-8                      4491897               533.2 ns/op             0 B/op          0 allocs/op
 ```
 
-### From `zerolog`
-```go
-// Before (zerolog)
-log.Info().Str("user_id", "123").Str("email", "user@example.com").Msg("User created")
-log.Error().Err(err).Str("query", query).Msg("Database error")
-
-// After (logze) - much cleaner!
-logze.Info("User created", "user_id", "123", "email", "user@example.com")
-logze.Err(err, "Database error", "query", query)
+Logging `Infof` (formatted) and two fields:
+```text
+BenchmarkZerologInfoFormat-8            11758495               207.0 ns/op            24 B/op          1 allocs/op
+BenchmarkLogzeInfoFormat-8              10047972               239.8 ns/op            24 B/op          1 allocs/op
+BenchmarkSLogInfoFormat-8                4026775               601.0 ns/op            24 B/op          1 allocs/op
 ```
 
-### From Standard Library
-```go
-// Before (standard log)
-log.Printf("User %s created with ID %d", email, userID)
 
-// After (logze) - structured and faster!
-logze.Infof("User %s created with ID %d", email, userID)
-// Or better yet:
-logze.Info("User created", "email", email, "user_id", userID)
+Logging `Error` with error and two fields:
+```text
+BenchmarkZerologError-8                 13900646               173.6 ns/op             0 B/op          0 allocs/op
+BenchmarkLogzeError-8                   10827030               221.7 ns/op             0 B/op          0 allocs/op
+BenchmarkSLogError-8                     3757587               635.7 ns/op             0 B/op          0 allocs/op
 ```
+
+
+Logging `Error` with error, stack trace and two fields:
+```text
+BenchmarkZerologErrorWithStack-8          545072               4379 ns/op            3298 B/op         73 allocs/op
+BenchmarkLogzeErrorWithStack-8            291956               8065 ns/op            5460 B/op         121 allocs/op
+BenchmarkSLogErrorWithStack-8             612562               3922 ns/op            1617 B/op         3 allocs/op
+```
+
+
+Logging `Info` and two fields using text handler for console / development:
+```text
+BenchmarkZerologInfoConsole-8             682558               3306 ns/op            1922 B/op         51 allocs/op
+BenchmarkLogzeInfoConsole-8               704247               3366 ns/op            1922 B/op         51 allocs/op
+BenchmarkSLogInfoConsole-8               4058850               588.1 ns/op             0 B/op          0 allocs/op
+```
+
+
+Additional `logze` features
+```text
+BenchmarkLogzeErr-8                     11857878               200.9 ns/op             0 B/op          0 allocs/op
+BenchmarkLogzeToIgnore5-8               10040202               238.5 ns/op             0 B/op          0 allocs/op
+```
+
 
 ## 🤝 Contributing
 
