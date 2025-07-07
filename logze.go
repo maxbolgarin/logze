@@ -2,6 +2,7 @@
 package logze
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -149,6 +150,26 @@ func (l Logger) CloseDiode() error {
 // Close closes the underlying [diode.Writer] if it is used.
 func (l Logger) Close() error {
 	return l.CloseDiode()
+}
+
+type ctxKey struct{}
+
+// AddToContext adds the [Logger] to the [context.Context].
+func (l Logger) AddToContext(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(ctxKey{}).(*Logger); !ok && l.l.GetLevel() == zerolog.Disabled {
+		// Do not store disabled logger.
+		return ctx
+	}
+	return context.WithValue(ctx, ctxKey{}, &l)
+}
+
+// GetFromContext returns the [Logger] from the [context.Context].
+func GetFromContext(ctx context.Context) Logger {
+	l, ok := ctx.Value(ctxKey{}).(*Logger)
+	if !ok || l == nil {
+		return Nop()
+	}
+	return *l
 }
 
 // Update replaces underlying logger with a new one created using provided config and fields.
