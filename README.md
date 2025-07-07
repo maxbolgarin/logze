@@ -489,10 +489,10 @@ logze.Info("User created", "email", email, "user_id", userID)
 ## 📊 Benchmarks
 Thoughts from benchmarks:
 * `logze` is about 3 times faster than `slog` and for 15% slower than `zerolog`
-* format methods like `logze.Infof` or `Msgf` doesn't add big overhead (only 30% slower and +1 alloc)
-* stack trace is very slow in `logze` and `zerolog`
-* console writer is very slow in `logze` and `zerolog` and should be used only in development (that the case when slog wins over `logze` - if you want to use text writer in production)
-* `logze.Err` is slightly faster that `logze.Error`
+* Format methods like `logze.Infof` or `Msgf` don't add big overhead (only 30% slower and +1 alloc)
+* `logze.Err` is slightly faster than `logze.Error`
+* Stack trace is very slow in `logze` and faster in `zerolog` and `slog`, but it's not recommended to use it in production, because it's very slow in all cases.
+* Console writer is slow in `logze` and `zerolog` and should be used only in development (that the case when `slog` wins - if you want to use text writer in production)
 
 
 Here is result of `go test -bench=. -benchmem -benchtime=2s`:
