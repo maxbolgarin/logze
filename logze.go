@@ -543,12 +543,57 @@ func (l Logger) WithDefaultCaller() Logger {
 //	// Log only 10% of debug messages
 //	sampler := zerolog.RandomSampler(10)
 //	logger := logze.NewConsoleJSON().WithSampler(sampler)
-//
-// See [Config.WithPercentageSampler], [Config.WithBurstSampler], and
-// [Config.WithMaxSampler] for convenient sampling configurations.
 func (l Logger) WithSampler(sampler zerolog.Sampler) Logger {
 	l.l = l.l.Sample(sampler)
 	return l
+}
+
+// WithPercentageSampler creates a new logger with a percentage-based sampler.
+//
+// This method creates a sampler that logs only a specified percentage of messages
+// at the specified levels. The percentage is calculated based on the number of
+// messages logged at each level.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithPercentageSampler(10, "debug", "info")
+//	logger.Debug("This will be logged 10% of the time")
+//	logger.Info("This will be logged 10% of the time")
+func (l Logger) WithPercentageSampler(percentage float64, levels ...string) Logger {
+	sampler := percentageSampler(percentage)
+	return l.WithSampler(getLevelSampler(sampler, levels...))
+}
+
+// WithBurstSampler creates a new logger with a burst-based sampler.
+//
+// This method creates a sampler that logs only a specified number of messages
+// at the specified levels within a given time period. The burst is the maximum
+// number of messages that can be logged within the period.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithBurstSampler(10, 100, 1*time.Second, "debug", "info")
+//	logger.Debug("This will be logged 10% of the time")
+//	logger.Info("This will be logged 10% of the time")
+func (l Logger) WithBurstSampler(percentage float64, burst int, period time.Duration, levels ...string) Logger {
+	sampler := burstSampler(percentage, burst, period)
+	return l.WithSampler(getLevelSampler(sampler, levels...))
+}
+
+// WithMaxSampler creates a new logger with a max-based sampler.
+//
+// This method creates a sampler that logs only a specified number of messages
+// at the specified levels within a given time period. The max is the maximum
+// number of messages that can be logged within the period.
+//
+// Example usage:
+//
+//	logger := logze.NewConsoleJSON().WithMaxSampler(100, 1*time.Second, "debug", "info")
+//	logger.Debug("This will be logged 10% of the time")
+//	logger.Info("This will be logged 10% of the time")
+func (l Logger) WithMaxSampler(max int, period time.Duration, levels ...string) Logger {
+	sampler := burstSampler(0, max, period)
+	return l.WithSampler(getLevelSampler(sampler, levels...))
 }
 
 // Trace logs a message at trace level with optional fields and caller information.

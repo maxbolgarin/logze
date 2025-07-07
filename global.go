@@ -2,6 +2,7 @@ package logze
 
 import (
 	stdlog "log"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -219,6 +220,21 @@ func Close() error {
 // WithSampler returns [Logger] with the provided [zerolog.Sampler].
 func WithSampler(sampler zerolog.Sampler) Logger {
 	return log.WithSampler(sampler)
+}
+
+// WithPercentageSampler returns [Logger] with the provided percentage sampler.
+func WithPercentageSampler(percentage float64, levels ...string) Logger {
+	return log.WithPercentageSampler(percentage, levels...)
+}
+
+// WithBurstSampler returns [Logger] with the provided burst sampler.
+func WithBurstSampler(percentage float64, burst int, period time.Duration, levels ...string) Logger {
+	return log.WithBurstSampler(percentage, burst, period, levels...)
+}
+
+// WithMaxSampler returns [Logger] with the provided max sampler.
+func WithMaxSampler(max int, period time.Duration, levels ...string) Logger {
+	return log.WithMaxSampler(max, period, levels...)
 }
 
 // Trace logs a message in trace level adding provided fields and information about method caller

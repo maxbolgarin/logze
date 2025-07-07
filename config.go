@@ -497,17 +497,16 @@ func (c Config) WithSampler(sampler zerolog.Sampler) Config {
 // Percentage is a float64 percentage of logs that will be sampled from 0 to 1.
 // Levels is an optional list of levels that will be sampled. If no levels are provided,
 // the sampler will be used for all levels.
+//
+// Example usage:
+//
+//	config := logze.C().WithPercentageSampler(0.1, "debug", "info")
+//	logger := config.New()
+//	logger.Debug("This will be logged 10% of the time")
+//	logger.Info("This will be logged 10% of the time")
 func (c Config) WithPercentageSampler(percentage float64, levels ...string) Config {
-	if percentage < 0 {
-		percentage = 0
-	}
-	if percentage > 1 {
-		percentage = 1
-	}
-	sampler := zerolog.RandomSampler(float64(1) / percentage)
-
+	sampler := percentageSampler(percentage)
 	c.Sampler = getLevelSampler(sampler, levels...)
-
 	return c
 }
 
@@ -517,27 +516,16 @@ func (c Config) WithPercentageSampler(percentage float64, levels ...string) Conf
 // Period is a time interval after which the percentage sampler will be called again.
 // Levels is an optional list of levels that will be sampled. If no levels are provided,
 // the sampler will be used for all levels.
+//
+// Example usage:
+//
+//	config := logze.C().WithBurstSampler(0.1, 100, 1*time.Second, "debug", "info")
+//	logger := config.New()
+//	logger.Debug("This will be logged 10% of the time")
+//	logger.Info("This will be logged 10% of the time")
 func (c Config) WithBurstSampler(percentage float64, burst int, period time.Duration, levels ...string) Config {
-	if percentage < 0 {
-		percentage = 0
-	}
-	if percentage > 1 {
-		percentage = 1
-	}
-	if burst < 0 {
-		burst = 0
-	}
-	if period <= 0 {
-		period = 1 * time.Second
-	}
-	sampler := &zerolog.BurstSampler{
-		Burst:       uint32(burst),
-		Period:      period,
-		NextSampler: zerolog.RandomSampler(float64(1) / percentage),
-	}
-
+	sampler := burstSampler(percentage, burst, period)
 	c.Sampler = getLevelSampler(sampler, levels...)
-
 	return c
 }
 
@@ -547,22 +535,41 @@ func (c Config) WithBurstSampler(percentage float64, burst int, period time.Dura
 // Any requests beyond the max limit will be dropped.
 // Levels is an optional list of levels that will be sampled. If no levels are provided,
 // the sampler will be used for all levels.
+//
+// Example usage:
+//
+//	config := logze.C().WithMaxSampler(100, 1*time.Second, "debug", "info")
+//	logger := config.New()
+//	logger.Debug("This will be logged 10% of the time")
+//	logger.Info("This will be logged 10% of the time")
 func (c Config) WithMaxSampler(max int, period time.Duration, levels ...string) Config {
-	if max < 0 {
-		max = 0
+	sampler := burstSampler(0, max, period)
+	c.Sampler = getLevelSampler(sampler, levels...)
+	return c
+}
+
+func percentageSampler(percentage float64) zerolog.Sampler {
+	if percentage < 0 {
+		return zerolog.RandomSampler(0)
+	}
+	if percentage > 1 {
+		return zerolog.RandomSampler(1)
+	}
+	return zerolog.RandomSampler(float64(1) / percentage)
+}
+
+func burstSampler(percentage float64, burst int, period time.Duration) zerolog.Sampler {
+	if burst < 0 {
+		burst = 0
 	}
 	if period <= 0 {
 		period = 1 * time.Second
 	}
-	sampler := &zerolog.BurstSampler{
-		Burst:       uint32(max),
+	return &zerolog.BurstSampler{
+		Burst:       uint32(burst),
 		Period:      period,
-		NextSampler: zerolog.RandomSampler(0), // Drop everything after burst
+		NextSampler: percentageSampler(percentage),
 	}
-
-	c.Sampler = getLevelSampler(sampler, levels...)
-
-	return c
 }
 
 func getLevelSampler(sampler zerolog.Sampler, levels ...string) zerolog.Sampler {
