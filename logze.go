@@ -212,6 +212,13 @@ func (l Logger) Tracef(msg string, args ...any) {
 	l.logf(l.l.Trace().Caller(1), msg, args)
 }
 
+// Traceif logs a message in trace level adding provided fields and information about method caller if condition is true.
+func (l Logger) TraceIf(condition bool, msg string, fields ...any) {
+	if condition {
+		l.Trace(msg, fields...)
+	}
+}
+
 // Debug logs a message in debug level adding provided fields.
 func (l Logger) Debug(msg string, fields ...any) {
 	l.log(l.l.Debug(), msg, fields)
@@ -220,6 +227,13 @@ func (l Logger) Debug(msg string, fields ...any) {
 // Debugf logs a formatted message in debug level adding provided fields after formatting args.
 func (l Logger) Debugf(msg string, args ...any) {
 	l.logf(l.l.Debug(), msg, args)
+}
+
+// DebugIf logs a message in debug level adding provided fields if condition is true.
+func (l Logger) DebugIf(condition bool, msg string, fields ...any) {
+	if condition {
+		l.Debug(msg, fields...)
+	}
 }
 
 // Info logs a message in info level adding provided fields.
@@ -232,6 +246,13 @@ func (l Logger) Infof(msg string, args ...any) {
 	l.logf(l.l.Info(), msg, args)
 }
 
+// InfoIf logs a message in info level adding provided fields if condition is true.
+func (l Logger) InfoIf(condition bool, msg string, fields ...any) {
+	if condition {
+		l.Info(msg, fields...)
+	}
+}
+
 // Warn logs a message in warning level adding provided fields.
 func (l Logger) Warn(msg string, fields ...any) {
 	l.log(l.l.Warn(), msg, fields)
@@ -240,6 +261,13 @@ func (l Logger) Warn(msg string, fields ...any) {
 // Warnf logs a formatted message in warn level adding provided fields after formatting args.
 func (l Logger) Warnf(msg string, args ...any) {
 	l.logf(l.l.Warn(), msg, args)
+}
+
+// WarnIf logs a message in warning level adding provided fields if condition is true.
+func (l Logger) WarnIf(condition bool, msg string, fields ...any) {
+	if condition {
+		l.Warn(msg, fields...)
+	}
 }
 
 // Err logs a provided error in error level adding provided fields.
@@ -254,6 +282,13 @@ func (l Logger) Errf(err error, msg string, args ...any) {
 	l.logf(ev, msg, args)
 }
 
+// ErrIf logs a provided error in error level adding provided fields if condition is true.
+func (l Logger) ErrIf(condition bool, err error, msg string, fields ...any) {
+	if condition {
+		l.Err(err, msg, fields...)
+	}
+}
+
 // Error logs a message in error level adding provided fields.
 func (l Logger) Error(msg string, fields ...any) {
 	l.log(l.l.Error(), msg, fields)
@@ -262,6 +297,13 @@ func (l Logger) Error(msg string, fields ...any) {
 // Errorf logs a formatted message in error level adding provided fields after formatting args.
 func (l Logger) Errorf(msg string, args ...any) {
 	l.logf(l.l.Error(), msg, args)
+}
+
+// ErrorIf logs a message in error level adding provided fields if condition is true.
+func (l Logger) ErrorIf(condition bool, msg string, fields ...any) {
+	if condition {
+		l.Error(msg, fields...)
+	}
 }
 
 // ErrStack logs a stack trace of provided error as message in error level adding fields.
@@ -290,6 +332,13 @@ func (l Logger) Fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
+// FatalIf logs a message in fatal level adding provided fields if condition is true, then calls os.Exit(1).
+func (l Logger) FatalIf(condition bool, v ...any) {
+	if condition {
+		l.Fatal(v...)
+	}
+}
+
 // Fatalln logs a message in fatal level using fmt.Sprintln to interpret args, then calls os.Exit(1).
 func (l Logger) Fatalln(v ...any) {
 	s := fmt.Sprintln(v...)
@@ -313,6 +362,13 @@ func (l Logger) Panicf(format string, args ...any) {
 	panic(fmt.Sprintf(format, args...))
 }
 
+// PanicIf logs a message in fatal level adding provided fields if condition is true, then calls panic().
+func (l Logger) PanicIf(condition bool, v ...any) {
+	if condition {
+		l.Panic(v...)
+	}
+}
+
 // Panicln logs a message in fatal level using fmt.Sprintln to interpret args, then calls panic().
 func (l Logger) Panicln(v ...any) {
 	s := fmt.Sprintln(v...)
@@ -329,16 +385,17 @@ func (l Logger) Print(v ...any) {
 	l.log(l.l.Log(), fmt.Sprint(v...), nil)
 }
 
+// PrintIf logs a message without level using [fmt.Sprint] to interpret args if condition is true.
+func (l Logger) PrintIf(condition bool, v ...any) {
+	if condition {
+		l.Print(v...)
+	}
+}
+
 // PrintStack logs a current stack trace.
 func (l Logger) PrintStack(v ...any) {
 	stack := debug.Stack()
 	l.log(l.l.Log(), string(stack), v)
-}
-
-// Log logs a message without level using [fmt.Sprint] to interpret args.
-// It is an alias for [Logger.Print].
-func (l Logger) Log(v ...any) {
-	l.Print(v...)
 }
 
 // Printf logs a formatted message without level.
@@ -349,6 +406,12 @@ func (l Logger) Printf(format string, args ...any) {
 // Println writes a message without level using fmt.Sprintln to interpret args.
 func (l Logger) Println(v ...any) {
 	l.log(l.l.Log(), fmt.Sprintln(v...), nil)
+}
+
+// Log logs a message without level using [fmt.Sprint] to interpret args.
+// It is an alias for [Logger.Print].
+func (l Logger) Log(v ...any) {
+	l.Print(v...)
 }
 
 // Write writes bytes to underlying [io.Writer].

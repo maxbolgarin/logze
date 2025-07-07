@@ -115,6 +115,11 @@ func Tracef(msg string, args ...any) {
 	log.logf(log.l.Trace().Caller(1), msg, args)
 }
 
+// TraceIf logs a message in trace level adding provided fields and information about method caller if condition is true.
+func TraceIf(condition bool, msg string, fields ...any) {
+	log.TraceIf(condition, msg, fields...)
+}
+
 // Debug logs a message in debug level adding provided fields using a global logger.
 func Debug(msg string, fields ...any) {
 	log.Debug(msg, fields...)
@@ -123,6 +128,11 @@ func Debug(msg string, fields ...any) {
 // Debugf logs a formatted message in debug level adding provided fields after formatting args using a global logger.
 func Debugf(msg string, args ...any) {
 	log.Debugf(msg, args...)
+}
+
+// DebugIf logs a message in debug level adding provided fields if condition is true.
+func DebugIf(condition bool, msg string, fields ...any) {
+	log.DebugIf(condition, msg, fields...)
 }
 
 // Info logs a message in info level adding provided fields using a global logger.
@@ -135,6 +145,11 @@ func Infof(msg string, args ...any) {
 	log.Infof(msg, args...)
 }
 
+// InfoIf logs a message in info level adding provided fields if condition is true.
+func InfoIf(condition bool, msg string, fields ...any) {
+	log.InfoIf(condition, msg, fields...)
+}
+
 // Warn logs a message in warning level adding provided fields using a global logger.
 func Warn(msg string, fields ...any) {
 	log.Warn(msg, fields...)
@@ -145,9 +160,19 @@ func Warnf(msg string, args ...any) {
 	log.Warnf(msg, args...)
 }
 
+// WarnIf logs a message in warning level adding provided fields if condition is true.
+func WarnIf(condition bool, msg string, fields ...any) {
+	log.WarnIf(condition, msg, fields...)
+}
+
 // Err logs a provided error in error level adding provided fields using a global logger.
 func Err(err error, msg string, fields ...any) {
 	log.Err(err, msg, fields...)
+}
+
+// ErrIf logs a provided error in error level adding provided fields if condition is true.
+func ErrIf(condition bool, err error, msg string, fields ...any) {
+	log.ErrIf(condition, err, msg, fields...)
 }
 
 // Error logs a message in error level adding provided fields using a global logger.
@@ -160,9 +185,19 @@ func Errorf(msg string, args ...any) {
 	log.Errorf(msg, args...)
 }
 
+// ErrorIf logs a message in error level adding provided fields if condition is true.
+func ErrorIf(condition bool, msg string, fields ...any) {
+	log.ErrorIf(condition, msg, fields...)
+}
+
 // ErrStack logs a stack trace of provided error as message in error level adding fields.
 func ErrStack(err error, fields ...any) {
 	log.ErrStack(err, fields...)
+}
+
+// FatalIf logs a message in fatal level adding provided fields if condition is true, then calls os.Exit(1).
+func FatalIf(condition bool, v ...any) {
+	log.FatalIf(condition, v...)
 }
 
 // Fatal logs a message in fatal level using fmt.Sprint to interpret args sing a global logger, then calls os.Exit(1).
@@ -178,6 +213,11 @@ func Fatalf(format string, args ...any) {
 // Fatalln logs a message in fatal level using fmt.Sprintln to interpret args using a global logger, then calls os.Exit(1).
 func Fatalln(v ...any) {
 	log.Fatalln(v...)
+}
+
+// PanicIf logs a message in fatal level adding provided fields if condition is true, then calls panic().
+func PanicIf(condition bool, v ...any) {
+	log.PanicIf(condition, v...)
 }
 
 // Panic logs a message in fatal level using fmt.Sprint to interpret args using a global logger, then calls panic().
@@ -198,6 +238,11 @@ func Panicln(v ...any) {
 // Print logs a message without level using [fmt.Sprint] to interpret args using a global logger.
 func Print(v ...any) {
 	log.Print(v...)
+}
+
+// PrintIf logs a message without level using [fmt.Sprint] to interpret args if condition is true.
+func PrintIf(condition bool, v ...any) {
+	log.PrintIf(condition, v...)
 }
 
 // PrintStack logs a current stack trace.
