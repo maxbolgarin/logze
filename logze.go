@@ -19,12 +19,12 @@ import (
 // Logger represents an initialized logger.
 // Default value behaves as default [zerolog.Logger].
 type Logger struct {
-	l          zerolog.Logger
-	errCounter ErrorCounter
-	toIgnore   []string
-	stackTrace bool
-	inited     bool
-
+	l           zerolog.Logger
+	errCounter  ErrorCounter
+	toIgnore    []string
+	ignoreMap   map[string]struct{} // Pre-compiled ignore map for O(1) lookup
+	stackTrace  bool
+	inited      bool
 	diodeWriter *diode.Writer
 }
 
@@ -111,9 +111,16 @@ func New(cfg Config, fields ...any) Logger {
 
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
+	// Pre-compile ignore map for O(1) lookups
+	ignoreMap := make(map[string]struct{}, len(cfg.ToIgnore))
+	for _, ignore := range cfg.ToIgnore {
+		ignoreMap[ignore] = struct{}{}
+	}
+
 	return Logger{
 		l:           l,
 		toIgnore:    cfg.ToIgnore,
+		ignoreMap:   ignoreMap,
 		errCounter:  cfg.ErrorCounter,
 		stackTrace:  cfg.StackTrace,
 		inited:      true,
@@ -181,6 +188,8 @@ func (l *Logger) Update(cfg Config, fields ...any) {
 	l.errCounter = newLogger.errCounter
 	l.stackTrace = newLogger.stackTrace
 	l.toIgnore = newLogger.toIgnore
+	l.ignoreMap = newLogger.ignoreMap
+	l.diodeWriter = newLogger.diodeWriter
 }
 
 // NotInited returns true if [Logger] is not inited (struct with default values).
@@ -233,6 +242,11 @@ func (l Logger) WithSimpleErrorCounter() Logger {
 // WithToIgnore returns [Logger] with the provided list of messages to ignore.
 func (l Logger) WithToIgnore(toIgnore ...string) Logger {
 	l.toIgnore = toIgnore
+	// Rebuild ignore map for O(1) lookups
+	l.ignoreMap = make(map[string]struct{}, len(toIgnore))
+	for _, ignore := range toIgnore {
+		l.ignoreMap[ignore] = struct{}{}
+	}
 	return l
 }
 
@@ -483,11 +497,22 @@ func (l Logger) GetErrorCounter() ErrorCounter {
 }
 
 func (l Logger) log(ev *zerolog.Event, msg string, fields []any) {
-	for _, ignore := range l.toIgnore {
-		if strings.Contains(msg, ignore) {
+	// Fast path: check exact matches first (O(1))
+	if len(l.ignoreMap) > 0 {
+		if _, exists := l.ignoreMap[msg]; exists {
 			return
 		}
 	}
+
+	// Slower path: check substring matches only if no exact match found
+	if len(l.toIgnore) > 0 {
+		for _, ignore := range l.toIgnore {
+			if strings.Contains(msg, ignore) {
+				return
+			}
+		}
+	}
+
 	if len(fields) > 0 {
 		ev, fields = l.setErrorWithStack(ev, false, fields...)
 		ev = ev.Fields(fields)
@@ -496,28 +521,39 @@ func (l Logger) log(ev *zerolog.Event, msg string, fields []any) {
 }
 
 func (l Logger) logf(ev *zerolog.Event, msg string, args []any) {
-	for _, ignore := range l.toIgnore {
-		if strings.Contains(msg, ignore) {
+	// Fast path: check exact matches first (O(1))
+	if len(l.ignoreMap) > 0 {
+		if _, exists := l.ignoreMap[msg]; exists {
 			return
 		}
 	}
+
+	// Slower path: check substring matches only if no exact match found
+	if len(l.toIgnore) > 0 {
+		for _, ignore := range l.toIgnore {
+			if strings.Contains(msg, ignore) {
+				return
+			}
+		}
+	}
+
 	numberOfFormats := strings.Count(msg, "%")
 	if numberOfFormats > 0 && numberOfFormats <= len(args) {
 		ev, args = l.setErrorWithStack(ev, true, args...)
 		ev = ev.Fields(args[numberOfFormats:])
 		args = args[:numberOfFormats]
-		msg = strings.Replace(msg, "%w", "%s", numberOfFormats)
-	}
-	if numberOfFormats == 0 && len(args) > 0 {
+		// Optimize %w replacement if needed
+		if strings.Contains(msg, "%w") {
+			msg = strings.ReplaceAll(msg, "%w", "%s")
+		}
+		ev.Msgf(msg, args...)
+	} else if numberOfFormats == 0 && len(args) > 0 {
 		ev, args = l.setErrorWithStack(ev, false, args...)
 		ev = ev.Fields(args)
-		args = nil
-	}
-	if len(args) == 0 {
 		ev.Msg(msg)
-		return
+	} else {
+		ev.Msg(msg)
 	}
-	ev.Msgf(msg, args...)
 }
 
 func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...any) (*zerolog.Event, []any) {

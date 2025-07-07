@@ -81,7 +81,7 @@ type Config struct {
 	DiodePollingInterval time.Duration
 
 	// DiodeAlertFunc is a function that will be called when diode writer will flush its buffer.
-	// Default value is a function that logs a message in warn level.
+	// Default value is a function that writes a message in stderr.
 	DiodeAlertFunc func(int)
 
 	// UseDiodeWaiter if true, will enable diode waiter istead of poller.
