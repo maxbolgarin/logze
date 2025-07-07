@@ -103,6 +103,10 @@ type Config struct {
 	// CallerSkipFrameCount is a number of frames to skip to get the caller information.
 	// Default value is 5.
 	CallerSkipFrameCount int
+
+	// Sample is a [zerolog.LevelSampler] that will be used when creating [Logger].
+	// Default value is nil.
+	Sampler zerolog.Sampler
 }
 
 // NewConfig returns [Config] with provided list of [io.Writer], where [Logger] should logs its data.
@@ -306,6 +310,100 @@ func (c Config) WithCallerSkipFrameCount(count int) Config {
 	c.AddCaller = true
 	c.CallerSkipFrameCount = count
 	return c
+}
+
+// WithPercentageSampler returns [Config] with a new percentage sampler.
+// Percentage is a float64 percentage of logs that will be sampled from 0 to 1.
+// Levels is an optional list of levels that will be sampled. If no levels are provided,
+// the sampler will be used for all levels.
+func (c Config) WithPercentageSampler(percentage float64, levels ...string) Config {
+	if percentage < 0 {
+		percentage = 0
+	}
+	if percentage > 1 {
+		percentage = 1
+	}
+	sampler := zerolog.RandomSampler(float64(1) / percentage)
+
+	c.Sampler = getLevelSampler(sampler, levels...)
+
+	return c
+}
+
+// WithBurstSampler returns [Config] with a new burst sampler.
+// Percentage is a float64 percentage of logs that will be sampled from 0 to 1.
+// Burst is the maximum number of event per period allowed before percentage sampling.
+// Period is a time interval after which the percentage sampler will be called again.
+// Levels is an optional list of levels that will be sampled. If no levels are provided,
+// the sampler will be used for all levels.
+func (c Config) WithBurstSampler(percentage float64, burst int, period time.Duration, levels ...string) Config {
+	if percentage < 0 {
+		percentage = 0
+	}
+	if percentage > 1 {
+		percentage = 1
+	}
+	if burst < 0 {
+		burst = 0
+	}
+	if period <= 0 {
+		period = 1 * time.Second
+	}
+	sampler := &zerolog.BurstSampler{
+		Burst:       uint32(burst),
+		Period:      period,
+		NextSampler: zerolog.RandomSampler(float64(1) / percentage),
+	}
+
+	c.Sampler = getLevelSampler(sampler, levels...)
+
+	return c
+}
+
+// WithMaxSampler returns [Config] with a new max sampler.
+// Max is the maximum number of requests allowed per period.
+// Period is a time interval after which the max count resets.
+// Any requests beyond the max limit will be dropped.
+// Levels is an optional list of levels that will be sampled. If no levels are provided,
+// the sampler will be used for all levels.
+func (c Config) WithMaxSampler(max int, period time.Duration, levels ...string) Config {
+	if max < 0 {
+		max = 0
+	}
+	if period <= 0 {
+		period = 1 * time.Second
+	}
+	sampler := &zerolog.BurstSampler{
+		Burst:       uint32(max),
+		Period:      period,
+		NextSampler: zerolog.RandomSampler(0), // Drop everything after burst
+	}
+
+	c.Sampler = getLevelSampler(sampler, levels...)
+
+	return c
+}
+
+func getLevelSampler(sampler zerolog.Sampler, levels ...string) zerolog.Sampler {
+	if len(levels) == 0 {
+		return sampler
+	}
+	resultSampler := &zerolog.LevelSampler{}
+	for _, level := range levels {
+		switch level {
+		case LevelTrace:
+			resultSampler.TraceSampler = sampler
+		case LevelDebug:
+			resultSampler.DebugSampler = sampler
+		case LevelInfo:
+			resultSampler.InfoSampler = sampler
+		case LevelWarn:
+			resultSampler.WarnSampler = sampler
+		case LevelError:
+			resultSampler.ErrorSampler = sampler
+		}
+	}
+	return resultSampler
 }
 
 func getConsoleWriter(w io.Writer, color bool) zerolog.ConsoleWriter {

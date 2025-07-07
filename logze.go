@@ -104,6 +104,9 @@ func New(cfg Config, fields ...any) Logger {
 	if cfg.Hook != nil {
 		l = l.Hook(cfg.Hook)
 	}
+	if cfg.Sampler != nil {
+		l = l.Sample(cfg.Sampler)
+	}
 
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
@@ -221,6 +224,12 @@ func (l Logger) WithCaller(callerSkipFrameCount int) Logger {
 // WithDefaultCaller returns [Logger] with the default caller skip frame count.
 func (l Logger) WithDefaultCaller() Logger {
 	l.l = l.l.With().CallerWithSkipFrameCount(DefaultCallerSkipFrameCount).Logger()
+	return l
+}
+
+// WithSampler returns [Logger] with the provided [zerolog.Sampler].
+func (l Logger) WithSampler(sampler zerolog.Sampler) Logger {
+	l.l = l.l.Sample(sampler)
 	return l
 }
 

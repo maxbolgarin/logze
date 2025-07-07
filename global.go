@@ -112,6 +112,11 @@ func Close() error {
 	return log.Close()
 }
 
+// WithSampler returns [Logger] with the provided [zerolog.Sampler].
+func WithSampler(sampler zerolog.Sampler) Logger {
+	return log.WithSampler(sampler)
+}
+
 // Trace logs a message in trace level adding provided fields and information about method caller
 // using a global logger.
 func Trace(msg string, fields ...any) {
