@@ -320,14 +320,14 @@ func (l Logger) ErrStack(err error, fields ...any) {
 // Fatal logs a message in fatal level using fmt.Sprint to interpret args, then calls os.Exit(1).
 func (l Logger) Fatal(v ...any) {
 	s := fmt.Sprint(v...)
-	l.incErrorConter(errors.New(s))
+	l.incErrorCounter(errors.New(s))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	os.Exit(1)
 }
 
 // Fatalf logs a formatted message in fatal level, then calls os.Exit(1).
 func (l Logger) Fatalf(format string, args ...any) {
-	l.incErrorConter(fmt.Errorf(format, args...))
+	l.incErrorCounter(fmt.Errorf(format, args...))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	os.Exit(1)
 }
@@ -342,7 +342,7 @@ func (l Logger) FatalIf(condition bool, v ...any) {
 // Fatalln logs a message in fatal level using fmt.Sprintln to interpret args, then calls os.Exit(1).
 func (l Logger) Fatalln(v ...any) {
 	s := fmt.Sprintln(v...)
-	l.incErrorConter(errors.New(s))
+	l.incErrorCounter(errors.New(s))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	os.Exit(1)
 }
@@ -350,14 +350,14 @@ func (l Logger) Fatalln(v ...any) {
 // Panic logs a message in fatal level using fmt.Sprint to interpret args, then calls panic().
 func (l Logger) Panic(v ...any) {
 	s := fmt.Sprint(v...)
-	l.incErrorConter(errors.New(s))
+	l.incErrorCounter(errors.New(s))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	panic(s)
 }
 
 // Panicf logs a formatted message in fatal level, then calls panic().
 func (l Logger) Panicf(format string, args ...any) {
-	l.incErrorConter(fmt.Errorf(format, args...))
+	l.incErrorCounter(fmt.Errorf(format, args...))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	panic(fmt.Sprintf(format, args...))
 }
@@ -372,7 +372,7 @@ func (l Logger) PanicIf(condition bool, v ...any) {
 // Panicln logs a message in fatal level using fmt.Sprintln to interpret args, then calls panic().
 func (l Logger) Panicln(v ...any) {
 	s := fmt.Sprintln(v...)
-	l.incErrorConter(errors.New(s))
+	l.incErrorCounter(errors.New(s))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	panic(s)
 }
@@ -483,7 +483,7 @@ func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...any)
 					err = errors.WithStack(err)
 				}
 			}
-			l.incErrorConter(err)
+			l.incErrorCounter(err)
 			if !inFormat {
 				if i-1 >= 0 {
 					newFields = append(args[:i-1], args[i+1:]...)
@@ -498,7 +498,7 @@ func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...any)
 	return ev, newFields
 }
 
-func (l Logger) incErrorConter(err error) {
+func (l Logger) incErrorCounter(err error) {
 	if l.errCounter != nil {
 		l.errCounter.Inc(err)
 	}
