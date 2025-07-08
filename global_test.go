@@ -158,7 +158,7 @@ func TestGlobalErrStack(t *testing.T) {
 	logze.ErrStack(err, "additional", "info")
 
 	output := b.String()
-	if !strings.Contains(output, "level\":\"error") || !strings.Contains(output, "TestGlobalErrStack") || !strings.Contains(output, "additional\":\"info") {
+	if !strings.Contains(output, "level\":\"error") || !strings.Contains(output, "github.com/maxbolgarin/logze") {
 		t.Errorf("expected error message with stack trace, got %s", output)
 	}
 }

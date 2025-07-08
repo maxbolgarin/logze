@@ -564,7 +564,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ---
 
-[version-img]: https://img.shields.io/badge/Go-%3E%3D%201.15-%23007d9c
+[version-img]: https://img.shields.io/badge/Go-%3E%3D%201.17-%23007d9c
 [doc-img]: https://pkg.go.dev/badge/github.com/maxbolgarin/logze
 [doc]: https://pkg.go.dev/github.com/maxbolgarin/logze
 [ci-img]: https://github.com/maxbolgarin/logze/actions/workflows/go.yml/badge.svg
