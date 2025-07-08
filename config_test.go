@@ -612,7 +612,7 @@ func TestSamplingIntegration(t *testing.T) {
 	cfg := logze.NewConfig(&b).WithLevel("debug").WithNoDiode().WithPercentageSampler(0, "debug")
 	logger := cfg.New()
 
-	// Try to log many messages
+	// Try to log minterface{} messages
 	for i := 0; i < 100; i++ {
 		logger.Debug("debug message")
 	}
@@ -944,9 +944,9 @@ func TestLevelsConstants(t *testing.T) {
 		}
 	}
 
-	// Test LevelsAny has same length
+	// Test Levelsinterface{} has same length
 	if len(logze.LevelsAny) != len(logze.Levels) {
-		t.Errorf("expected LevelsAny to have same length as Levels")
+		t.Errorf("expected Levelsinterface{} to have same length as Levels")
 	}
 }
 

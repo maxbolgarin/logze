@@ -83,7 +83,7 @@ type Logger struct {
 //   - Call logger.Close() or logger.CloseDiode() before application exit
 //   - Use cfg.WithNoDiode() to disable diode and ensure immediate writes
 //   - Note: Disabling diode may cause blocking if writing to stderr with high log volume
-func New(cfg Config, fields ...any) Logger {
+func New(cfg Config, fields ...interface{}) Logger {
 	if len(cfg.Writers) == 0 || cfg.Level == LevelDisabled {
 		cfg.Writers = []io.Writer{io.Discard}
 	}
@@ -189,7 +189,7 @@ func NewFromZerolog(l zerolog.Logger) Logger {
 // This is a convenience constructor for quick setup during development or simple applications.
 // It's equivalent to: New(NewConfig().WithConsoleJSON().WithLevel("info"), fields...)
 //
-// The logger outputs structured JSON logs to stderr with timestamps and includes any
+// The logger outputs structured JSON logs to stderr with timestamps and includes interface{}
 // provided fields in all log messages.
 //
 // Example usage:
@@ -199,7 +199,7 @@ func NewFromZerolog(l zerolog.Logger) Logger {
 //	// Output: {"level":"info","time":"2023-11-20T18:48:14+03:00","message":"Server starting","service":"web-api","version":"2.1.0","port":8080}
 //
 // For more configuration options, use [New] with a custom [Config].
-func NewConsoleJSON(fields ...any) Logger {
+func NewConsoleJSON(fields ...interface{}) Logger {
 	return New(NewConfig().WithConsoleJSON(), fields...)
 }
 
@@ -315,7 +315,7 @@ func GetFromContext(ctx context.Context) Logger {
 // Update replaces the logger's configuration and fields with new values.
 //
 // This method modifies the logger in-place, replacing its underlying configuration,
-// output writers, level, error counter, and other settings. Any existing fields
+// output writers, level, error counter, and other settings. interface{} existing fields
 // are replaced with the new ones.
 //
 // ⚠️  THREAD SAFETY WARNING
@@ -333,7 +333,7 @@ func GetFromContext(ctx context.Context) Logger {
 //	prodConfig := logze.C(file).WithLevel("warn").WithSimpleErrorCounter()
 //	logger.Update(prodConfig, "environment", "production")
 //	logger.Info("This won't be logged due to warn level")
-func (l *Logger) Update(cfg Config, fields ...any) {
+func (l *Logger) Update(cfg Config, fields ...interface{}) {
 	newLogger := New(cfg, fields...)
 	l.l = newLogger.l
 	l.inited = newLogger.inited
@@ -347,7 +347,7 @@ func (l *Logger) Update(cfg Config, fields ...any) {
 // NotInited reports whether the logger has been properly initialized.
 //
 // Returns true if the logger is a zero-value struct that hasn't been created
-// through any constructor ([New], [NewConsoleJSON], etc.). Zero-value loggers
+// through interface{} constructor ([New], [NewConsoleJSON], etc.). Zero-value loggers
 // behave as no-op loggers but this method can be used to detect uninitialized state.
 //
 // Example usage:
@@ -364,7 +364,7 @@ func (l Logger) NotInited() bool {
 // WithFields creates a new logger with additional fields that will be included in every log message.
 //
 // Fields should be provided as alternating key-value pairs. These fields will be
-// added to any fields already configured on the logger and will appear in all
+// added to interface{} fields already configured on the logger and will appear in all
 // subsequent log messages from the returned logger.
 //
 // This method returns a new logger instance; the original logger is not modified.
@@ -376,8 +376,8 @@ func (l Logger) NotInited() bool {
 //	requestLogger.Info("Processing request")
 //	// Output includes: "service":"api","request_id":"abc123","user_id":456
 //
-// Fields can be any JSON-serializable values: strings, numbers, booleans, slices, maps.
-func (l Logger) WithFields(fields ...any) Logger {
+// Fields can be interface{} JSON-serializable values: strings, numbers, booleans, slices, maps.
+func (l Logger) WithFields(fields ...interface{}) Logger {
 	l.l = l.l.With().Fields(fields).Logger()
 	return l
 }
@@ -391,7 +391,7 @@ func (l Logger) WithFields(fields ...any) Logger {
 //
 //	logger := logze.NewConsoleJSON().With("component", "auth").With("version", "2.1")
 //	logger.Info("Authentication module initialized")
-func (l Logger) With(fields ...any) Logger {
+func (l Logger) With(fields ...interface{}) Logger {
 	return l.WithFields(fields...)
 }
 
@@ -482,7 +482,7 @@ func (l Logger) WithSimpleErrorCounter() Logger {
 
 // WithToIgnore creates a new logger that filters out specified messages.
 //
-// Messages that exactly match any of the provided strings, or contain them as
+// Messages that exactly match interface{} of the provided strings, or contain them as
 // substrings, will be discarded and not logged. This is useful for reducing
 // noise from repeated or unimportant messages.
 //
@@ -506,7 +506,7 @@ func (l Logger) WithToIgnore(toIgnore ...string) Logger {
 
 // WithCaller creates a new logger that includes caller information in log messages.
 //
-// The callerSkipFrameCount parameter determines how many stack frames to skip
+// The callerSkipFrameCount parameter determines how minterface{} stack frames to skip
 // when determining the caller. This is useful when wrapping the logger in
 // other functions and you want to report the actual caller, not the wrapper.
 //
@@ -613,20 +613,20 @@ func (l Logger) WithMaxSampler(max int, period time.Duration, levels ...string) 
 //
 //	logger.Trace("Function entry", "function", "processUser", "user_id", 123)
 //	// Output: {"level":"trace","caller":"main.go:45","message":"Function entry","function":"processUser","user_id":123}
-func (l Logger) Trace(msg string, fields ...any) {
+func (l Logger) Trace(msg string, fields ...interface{}) {
 	l.log(l.l.Trace().Caller(1), msg, fields)
 }
 
 // Tracef logs a formatted message at trace level with caller information.
 //
 // This is the formatted version of Trace. Format verbs are processed using fmt.Sprintf.
-// Any additional arguments beyond the format placeholders are treated as structured fields.
+// interface{} additional arguments beyond the format placeholders are treated as structured fields.
 //
 // Example usage:
 //
 //	logger.Tracef("Processing %d items for user %s", count, username, "request_id", "abc123")
 //	// Formats the message, then adds request_id as a structured field
-func (l Logger) Tracef(msg string, args ...any) {
+func (l Logger) Tracef(msg string, args ...interface{}) {
 	l.logf(l.l.Trace().Caller(1), msg, args)
 }
 
@@ -639,7 +639,7 @@ func (l Logger) Tracef(msg string, args ...any) {
 //
 //	logger.TraceIf(debugMode, "Debug info", "state", expensiveStateCapture())
 //	// Only evaluates expensiveStateCapture() if debugMode is true
-func (l Logger) TraceIf(condition bool, msg string, fields ...any) {
+func (l Logger) TraceIf(condition bool, msg string, fields ...interface{}) {
 	if condition {
 		l.Trace(msg, fields...)
 	}
@@ -656,20 +656,20 @@ func (l Logger) TraceIf(condition bool, msg string, fields ...any) {
 //
 //	logger.Debug("Cache hit", "key", "user:123", "ttl", "5m", "size", 1024)
 //	// Output: {"level":"debug","message":"Cache hit","key":"user:123","ttl":"5m","size":1024}
-func (l Logger) Debug(msg string, fields ...any) {
+func (l Logger) Debug(msg string, fields ...interface{}) {
 	l.log(l.l.Debug(), msg, fields)
 }
 
 // Debugf logs a formatted message at debug level.
 //
 // This is the formatted version of Debug. Format verbs are processed using fmt.Sprintf.
-// Any additional arguments beyond the format placeholders are treated as structured fields.
+// interface{} additional arguments beyond the format placeholders are treated as structured fields.
 //
 // Example usage:
 //
 //	logger.Debugf("Query executed in %dms", duration, "query", sqlQuery, "rows", rowCount)
 //	// Formats the duration into the message, then adds query and rows as fields
-func (l Logger) Debugf(msg string, args ...any) {
+func (l Logger) Debugf(msg string, args ...interface{}) {
 	l.logf(l.l.Debug(), msg, args)
 }
 
@@ -682,7 +682,7 @@ func (l Logger) Debugf(msg string, args ...any) {
 //
 //	logger.DebugIf(cfg.VerboseSQL, "SQL executed", "query", query, "duration", elapsed)
 //	// Only logs SQL information when verbose SQL logging is enabled
-func (l Logger) DebugIf(condition bool, msg string, fields ...any) {
+func (l Logger) DebugIf(condition bool, msg string, fields ...interface{}) {
 	if condition {
 		l.Debug(msg, fields...)
 	}
@@ -700,20 +700,20 @@ func (l Logger) DebugIf(condition bool, msg string, fields ...any) {
 //
 //	logger.Info("User authenticated", "user_id", 123, "method", "oauth", "ip", "192.168.1.1")
 //	// Output: {"level":"info","message":"User authenticated","user_id":123,"method":"oauth","ip":"192.168.1.1"}
-func (l Logger) Info(msg string, fields ...any) {
+func (l Logger) Info(msg string, fields ...interface{}) {
 	l.log(l.l.Info(), msg, fields)
 }
 
 // Infof logs a formatted message at info level.
 //
 // This is the formatted version of Info. Format verbs are processed using fmt.Sprintf.
-// Any additional arguments beyond the format placeholders are treated as structured fields.
+// interface{} additional arguments beyond the format placeholders are treated as structured fields.
 //
 // Example usage:
 //
 //	logger.Infof("Server started on port %d", port, "environment", env, "version", version)
 //	// Formats the port into the message, then adds environment and version as fields
-func (l Logger) Infof(msg string, args ...any) {
+func (l Logger) Infof(msg string, args ...interface{}) {
 	l.logf(l.l.Info(), msg, args)
 }
 
@@ -726,7 +726,7 @@ func (l Logger) Infof(msg string, args ...any) {
 //
 //	logger.InfoIf(cfg.LogSuccessfulRequests, "Request completed", "duration", elapsed, "status", 200)
 //	// Only logs successful requests when the feature is enabled
-func (l Logger) InfoIf(condition bool, msg string, fields ...any) {
+func (l Logger) InfoIf(condition bool, msg string, fields ...interface{}) {
 	if condition {
 		l.Info(msg, fields...)
 	}
@@ -744,20 +744,20 @@ func (l Logger) InfoIf(condition bool, msg string, fields ...any) {
 //
 //	logger.Warn("API rate limit approaching", "current", 950, "limit", 1000, "user_id", 123)
 //	// Output: {"level":"warn","message":"API rate limit approaching","current":950,"limit":1000,"user_id":123}
-func (l Logger) Warn(msg string, fields ...any) {
+func (l Logger) Warn(msg string, fields ...interface{}) {
 	l.log(l.l.Warn(), msg, fields)
 }
 
 // Warnf logs a formatted message at warning level.
 //
 // This is the formatted version of Warn. Format verbs are processed using fmt.Sprintf.
-// Any additional arguments beyond the format placeholders are treated as structured fields.
+// interface{} additional arguments beyond the format placeholders are treated as structured fields.
 //
 // Example usage:
 //
 //	logger.Warnf("Cache miss for key %s", key, "cache_type", "redis", "fallback", "database")
 //	// Formats the key into the message, then adds cache_type and fallback as fields
-func (l Logger) Warnf(msg string, args ...any) {
+func (l Logger) Warnf(msg string, args ...interface{}) {
 	l.logf(l.l.Warn(), msg, args)
 }
 
@@ -770,7 +770,7 @@ func (l Logger) Warnf(msg string, args ...any) {
 //
 //	logger.WarnIf(responseTime > threshold, "Slow response", "duration", responseTime, "threshold", threshold)
 //	// Only warns when response time exceeds the configured threshold
-func (l Logger) WarnIf(condition bool, msg string, fields ...any) {
+func (l Logger) WarnIf(condition bool, msg string, fields ...interface{}) {
 	if condition {
 		l.Warn(msg, fields...)
 	}
@@ -788,7 +788,7 @@ func (l Logger) WarnIf(condition bool, msg string, fields ...any) {
 //
 //	logger.Err(err, "Database connection failed", "host", "localhost", "database", "users", "retry", 3)
 //	// Output: {"level":"error","error":"connection refused","message":"Database connection failed","host":"localhost","database":"users","retry":3}
-func (l Logger) Err(err error, msg string, fields ...any) {
+func (l Logger) Err(err error, msg string, fields ...interface{}) {
 	ev, _ := l.setErrorWithStack(l.l.Error(), false, err)
 	l.log(ev, msg, fields)
 }
@@ -796,14 +796,14 @@ func (l Logger) Err(err error, msg string, fields ...any) {
 // Errf logs an error with a formatted message at error level.
 //
 // This is the formatted version of Err. Format verbs are processed using fmt.Sprintf.
-// The error is automatically handled and any additional arguments beyond format placeholders
+// The error is automatically handled and interface{} additional arguments beyond format placeholders
 // are treated as structured fields.
 //
 // Example usage:
 //
 //	logger.Errf(err, "Failed to process %d items", count, "batch_id", batchID, "remaining", remaining)
 //	// Formats the count into the message, then adds batch_id and remaining as fields
-func (l Logger) Errf(err error, msg string, args ...any) {
+func (l Logger) Errf(err error, msg string, args ...interface{}) {
 	ev, _ := l.setErrorWithStack(l.l.Error(), false, err)
 	l.logf(ev, msg, args)
 }
@@ -817,7 +817,7 @@ func (l Logger) Errf(err error, msg string, args ...any) {
 //
 //	logger.ErrIf(err != nil, err, "Operation failed", "operation", "user_update", "user_id", userID)
 //	// Only logs if an error actually occurred
-func (l Logger) ErrIf(condition bool, err error, msg string, fields ...any) {
+func (l Logger) ErrIf(condition bool, err error, msg string, fields ...interface{}) {
 	if condition {
 		l.Err(err, msg, fields...)
 	}
@@ -834,20 +834,20 @@ func (l Logger) ErrIf(condition bool, err error, msg string, fields ...any) {
 //
 //	logger.Error("Validation failed", "field", "email", "value", userEmail, "reason", "invalid format")
 //	// Output: {"level":"error","message":"Validation failed","field":"email","value":"user@domain","reason":"invalid format"}
-func (l Logger) Error(msg string, fields ...any) {
+func (l Logger) Error(msg string, fields ...interface{}) {
 	l.log(l.l.Error(), msg, fields)
 }
 
 // Errorf logs a formatted error message at error level.
 //
 // This is the formatted version of Error. Format verbs are processed using fmt.Sprintf.
-// Any additional arguments beyond the format placeholders are treated as structured fields.
+// interface{} additional arguments beyond the format placeholders are treated as structured fields.
 //
 // Example usage:
 //
 //	logger.Errorf("Rate limit exceeded: %d requests in %s", count, duration, "client_ip", clientIP)
 //	// Formats the count and duration into the message, then adds client_ip as a field
-func (l Logger) Errorf(msg string, args ...any) {
+func (l Logger) Errorf(msg string, args ...interface{}) {
 	l.logf(l.l.Error(), msg, args)
 }
 
@@ -860,7 +860,7 @@ func (l Logger) Errorf(msg string, args ...any) {
 //
 //	logger.ErrorIf(attempts > maxRetries, "Max retries exceeded", "attempts", attempts, "max", maxRetries)
 //	// Only logs when retry limit is actually exceeded
-func (l Logger) ErrorIf(condition bool, msg string, fields ...any) {
+func (l Logger) ErrorIf(condition bool, msg string, fields ...interface{}) {
 	if condition {
 		l.Error(msg, fields...)
 	}
@@ -883,9 +883,9 @@ func (l Logger) ErrorIf(condition bool, msg string, fields ...any) {
 //
 // Note: The stack trace output can be quite verbose. Consider using Err() with WithStack()
 // for more structured error logging in production.
-func (l Logger) ErrStack(err error, fields ...any) {
+func (l Logger) ErrStack(err error, fields ...interface{}) {
 	_, ok := err.(interface {
-		StackForLogger() []any
+		StackForLogger() []interface{}
 	})
 	if !ok {
 		err = errors.WithStack(err)
@@ -908,7 +908,7 @@ func (l Logger) ErrStack(err error, fields ...any) {
 //	// Logs the message and immediately exits with code 1
 //
 // For recoverable errors, use Error() or Err() instead.
-func (l Logger) Fatal(v ...any) {
+func (l Logger) Fatal(v ...interface{}) {
 	s := fmt.Sprint(v...)
 	l.incErrorCounter(errors.New(s))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
@@ -928,7 +928,7 @@ func (l Logger) Fatal(v ...any) {
 //
 //	logger.Fatalf("Failed to bind to port %d: %v", port, err)
 //	// Logs the formatted message and immediately exits with code 1
-func (l Logger) Fatalf(format string, args ...any) {
+func (l Logger) Fatalf(format string, args ...interface{}) {
 	l.incErrorCounter(fmt.Errorf(format, args...))
 	l.logf(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	os.Exit(1)
@@ -944,7 +944,7 @@ func (l Logger) Fatalf(format string, args ...any) {
 //
 //	logger.FatalIf(config == nil, "Configuration file is required")
 //	// Only exits if config is actually nil
-func (l Logger) FatalIf(condition bool, v ...any) {
+func (l Logger) FatalIf(condition bool, v ...interface{}) {
 	if condition {
 		l.Fatal(v...)
 	}
@@ -964,7 +964,7 @@ func (l Logger) FatalIf(condition bool, v ...any) {
 //
 //	logger.Fatalln("Critical error:", err)
 //	// Logs "Critical error: <error message>\n" and immediately exits with code 1
-func (l Logger) Fatalln(v ...any) {
+func (l Logger) Fatalln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
 	l.incErrorCounter(errors.New(s))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
@@ -986,7 +986,7 @@ func (l Logger) Fatalln(v ...any) {
 //	// Logs the message and immediately panics with the message string
 //
 // For recoverable errors, use Error() or Err() instead.
-func (l Logger) Panic(v ...any) {
+func (l Logger) Panic(v ...interface{}) {
 	s := fmt.Sprint(v...)
 	l.incErrorCounter(errors.New(s))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
@@ -1006,7 +1006,7 @@ func (l Logger) Panic(v ...any) {
 //
 //	logger.Panicf("Buffer overflow: tried to write %d bytes to %d byte buffer", writeSize, bufSize)
 //	// Logs and panics with the formatted message
-func (l Logger) Panicf(format string, args ...any) {
+func (l Logger) Panicf(format string, args ...interface{}) {
 	l.incErrorCounter(fmt.Errorf(format, args...))
 	l.logf(l.l.WithLevel(zerolog.FatalLevel), format, args)
 	panic(fmt.Sprintf(format, args...))
@@ -1021,7 +1021,7 @@ func (l Logger) Panicf(format string, args ...any) {
 //
 //	logger.PanicIf(len(items) == 0, "Items slice cannot be empty")
 //	// Only panics if the slice is actually empty
-func (l Logger) PanicIf(condition bool, v ...any) {
+func (l Logger) PanicIf(condition bool, v ...interface{}) {
 	if condition {
 		l.Panic(v...)
 	}
@@ -1041,14 +1041,14 @@ func (l Logger) PanicIf(condition bool, v ...any) {
 //
 //	logger.Panicln("Critical invariant failed:", details)
 //	// Logs "Critical invariant failed: <details>\n" and panics with that string
-func (l Logger) Panicln(v ...any) {
+func (l Logger) Panicln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
 	l.incErrorCounter(errors.New(s))
 	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
 	panic(s)
 }
 
-// Print logs a message without any level designation using fmt.Sprint to format arguments.
+// Print logs a message without interface{} level designation using fmt.Sprint to format arguments.
 //
 // This method outputs messages that don't fit into standard log levels or when you
 // want unstructured output. The message appears without level, timestamp, or other
@@ -1061,7 +1061,7 @@ func (l Logger) Panicln(v ...any) {
 //	logger.Print("System starting up...")
 //	logger.Print("Current time:", time.Now())
 //	// Output depends on your logger configuration but typically just the message content
-func (l Logger) Print(v ...any) {
+func (l Logger) Print(v ...interface{}) {
 	if len(v) == 0 {
 		return
 	}
@@ -1077,7 +1077,7 @@ func (l Logger) Print(v ...any) {
 //
 //	logger.PrintIf(verbose, "Detailed startup information:", details)
 //	// Only prints when verbose mode is enabled
-func (l Logger) PrintIf(condition bool, v ...any) {
+func (l Logger) PrintIf(condition bool, v ...interface{}) {
 	if condition {
 		l.Print(v...)
 	}
@@ -1087,7 +1087,7 @@ func (l Logger) PrintIf(condition bool, v ...any) {
 //
 // This method captures and logs the call stack from the point where it's called,
 // which is useful for debugging unexpected code paths or understanding call flow.
-// Any additional arguments are treated as structured fields.
+// interface{} additional arguments are treated as structured fields.
 //
 // Example usage:
 //
@@ -1095,7 +1095,7 @@ func (l Logger) PrintIf(condition bool, v ...any) {
 //	// Logs the full stack trace with component and unexpected_path as structured fields
 //
 // Note: Stack traces can be quite verbose. Use sparingly in production code.
-func (l Logger) PrintStack(v ...any) {
+func (l Logger) PrintStack(v ...interface{}) {
 	stack := debug.Stack()
 	l.log(l.l.Log(), string(stack), v)
 }
@@ -1103,7 +1103,7 @@ func (l Logger) PrintStack(v ...any) {
 // Printf logs a formatted message without level designation.
 //
 // This method formats the message using fmt.Sprintf and outputs it without
-// standard log level metadata. Any arguments beyond the format placeholders
+// standard log level metadata. interface{} arguments beyond the format placeholders
 // are treated as structured fields.
 //
 // Example usage:
@@ -1111,7 +1111,7 @@ func (l Logger) PrintStack(v ...any) {
 //	logger.Printf("Processing %d items", count)
 //	logger.Printf("User %s logged in", username, "session_id", sessionID)
 //	// Second example formats username into message, adds session_id as field
-func (l Logger) Printf(format string, args ...any) {
+func (l Logger) Printf(format string, args ...interface{}) {
 	l.logf(l.l.Log(), format, args)
 }
 
@@ -1125,7 +1125,7 @@ func (l Logger) Printf(format string, args ...any) {
 //	logger.Println("Starting application...")
 //	logger.Println("Version:", version, "Build:", buildID)
 //	// Output: "Version: 1.0.0 Build: abc123\n" (exact format depends on configuration)
-func (l Logger) Println(v ...any) {
+func (l Logger) Println(v ...interface{}) {
 	l.log(l.l.Log(), fmt.Sprintln(v...), nil)
 }
 
@@ -1138,11 +1138,11 @@ func (l Logger) Println(v ...any) {
 //
 //	logger.Log("Application event occurred")
 //	// Identical to logger.Print("Application event occurred")
-func (l Logger) Log(v ...any) {
+func (l Logger) Log(v ...interface{}) {
 	l.Print(v...)
 }
 
-// Write implements [io.Writer] interface, allowing the logger to be used anywhere an io.Writer is expected.
+// Write implements [io.Writer] interface, allowing the logger to be used interface{}where an io.Writer is expected.
 //
 // This method writes the provided bytes directly to the underlying zerolog writer,
 // bypassing normal log formatting and structure. The data is written as-is.
@@ -1178,7 +1178,7 @@ func (l Logger) Raw() *zerolog.Logger {
 	return &l.l
 }
 
-// GetErrorCounter returns the error counter associated with this logger, if any.
+// GetErrorCounter returns the error counter associated with this logger, if interface{}.
 //
 // Returns nil if no error counter was configured via WithErrorCounter or
 // WithSimpleErrorCounter. The returned counter can be used to retrieve
@@ -1196,7 +1196,7 @@ func (l Logger) GetErrorCounter() ErrorCounter {
 	return l.errCounter
 }
 
-func (l Logger) log(ev *zerolog.Event, msg string, fields []any) {
+func (l Logger) log(ev *zerolog.Event, msg string, fields []interface{}) {
 	// Fast path: check exact matches first (O(1))
 	if len(l.ignoreMap) > 0 {
 		if _, exists := l.ignoreMap[msg]; exists {
@@ -1220,7 +1220,7 @@ func (l Logger) log(ev *zerolog.Event, msg string, fields []any) {
 	ev.Msg(msg)
 }
 
-func (l Logger) logf(ev *zerolog.Event, msg string, args []any) {
+func (l Logger) logf(ev *zerolog.Event, msg string, args []interface{}) {
 	// Fast path: check exact matches first (O(1))
 	if len(l.ignoreMap) > 0 {
 		if _, exists := l.ignoreMap[msg]; exists {
@@ -1256,7 +1256,7 @@ func (l Logger) logf(ev *zerolog.Event, msg string, args []any) {
 	}
 }
 
-func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...any) (*zerolog.Event, []any) {
+func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...interface{}) (*zerolog.Event, []interface{}) {
 	newFields := args
 	for i, a := range args {
 		err, ok := a.(error)
@@ -1266,7 +1266,7 @@ func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...any)
 		if l.stackTrace {
 			// Hack to use github.com/maxbolgarin/errm without importing it
 			errmErr, ok := err.(interface {
-				StackForLogger() []any
+				StackForLogger() []interface{}
 			})
 			if ok {
 				ev = ev.Fields(errmErr.StackForLogger())
@@ -1281,7 +1281,7 @@ func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...any)
 			// For key-value pairs, we need to remove both key and value if error is a value
 			if i > 0 && i%2 == 1 {
 				// Error is at odd position (value position), remove key-value pair
-				newFields = make([]any, 0, len(args)-2)
+				newFields = make([]interface{}, 0, len(args)-2)
 				newFields = append(newFields, args[:i-1]...)
 				newFields = append(newFields, args[i+1:]...)
 			} else if i == 0 {
@@ -1289,7 +1289,7 @@ func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...any)
 				newFields = args[1:]
 			} else {
 				// Error is at even position (key position), only remove the error
-				newFields = make([]any, 0, len(args)-1)
+				newFields = make([]interface{}, 0, len(args)-1)
 				newFields = append(newFields, args[:i]...)
 				newFields = append(newFields, args[i+1:]...)
 			}

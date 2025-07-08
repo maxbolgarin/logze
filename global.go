@@ -94,7 +94,7 @@ func SetDefault(l Logger) {
 //	// Now all package functions and standard log calls use this configuration
 //	logze.Info("Application started")
 //	log.Println("This also goes through logze")
-func Init(cfg Config, fields ...any) {
+func Init(cfg Config, fields ...interface{}) {
 	log = New(cfg, fields...)
 	SetStdLogger(log)
 }
@@ -113,7 +113,7 @@ func Init(cfg Config, fields ...any) {
 //	// Switch from development to production configuration
 //	prodConfig := logze.C(prodFile).WithLevel("warn").WithNoDiode()
 //	logze.Update(prodConfig, "environment", "production")
-func Update(cfg Config, fields ...any) {
+func Update(cfg Config, fields ...interface{}) {
 	log.Update(cfg, fields...)
 	SetStdLogger(log)
 }
@@ -133,7 +133,7 @@ func Update(cfg Config, fields ...any) {
 //
 //	// Now standard library log calls will include component and source fields
 //	log.Println("This goes through logze with context")
-func SetStdLogger(l Logger, fields ...any) {
+func SetStdLogger(l Logger, fields ...interface{}) {
 	stdlog.SetFlags(0)
 	stdlog.SetOutput(l.WithFields(fields...))
 	log = l
@@ -150,7 +150,7 @@ func SetStdLogger(l Logger, fields ...any) {
 //
 //	requestLogger := logze.WithFields("request_id", "abc123", "user_id", 456)
 //	requestLogger.Info("Processing request") // Includes request_id and user_id
-func WithFields(fields ...any) Logger {
+func WithFields(fields ...interface{}) Logger {
 	return log.WithFields(fields...)
 }
 
@@ -159,7 +159,7 @@ func WithFields(fields ...any) Logger {
 // Example usage:
 //
 //	logger := logze.With("component", "auth", "operation", "login")
-func With(fields ...any) Logger {
+func With(fields ...interface{}) Logger {
 	return log.With(fields...)
 }
 
@@ -239,164 +239,164 @@ func WithMaxSampler(max int, period time.Duration, levels ...string) Logger {
 
 // Trace logs a message in trace level adding provided fields and information about method caller
 // using a global logger.
-func Trace(msg string, fields ...any) {
+func Trace(msg string, fields ...interface{}) {
 	log.log(log.l.Trace().Caller(1), msg, fields)
 }
 
 // Tracef logs a formatted message in trace level adding provided fields after formatting args
 // and information about method caller using a global logger.
-func Tracef(msg string, args ...any) {
+func Tracef(msg string, args ...interface{}) {
 	log.logf(log.l.Trace().Caller(1), msg, args)
 }
 
 // TraceIf logs a message in trace level adding provided fields and information about method caller if condition is true.
-func TraceIf(condition bool, msg string, fields ...any) {
+func TraceIf(condition bool, msg string, fields ...interface{}) {
 	log.TraceIf(condition, msg, fields...)
 }
 
 // Debug logs a message in debug level adding provided fields using a global logger.
-func Debug(msg string, fields ...any) {
+func Debug(msg string, fields ...interface{}) {
 	log.Debug(msg, fields...)
 }
 
 // Debugf logs a formatted message in debug level adding provided fields after formatting args using a global logger.
-func Debugf(msg string, args ...any) {
+func Debugf(msg string, args ...interface{}) {
 	log.Debugf(msg, args...)
 }
 
 // DebugIf logs a message in debug level adding provided fields if condition is true.
-func DebugIf(condition bool, msg string, fields ...any) {
+func DebugIf(condition bool, msg string, fields ...interface{}) {
 	log.DebugIf(condition, msg, fields...)
 }
 
 // Info logs a message in info level adding provided fields using a global logger.
-func Info(msg string, fields ...any) {
+func Info(msg string, fields ...interface{}) {
 	log.Info(msg, fields...)
 }
 
 // Infof logs a formatted message in info level adding provided fields after formatting args using a global logger.
-func Infof(msg string, args ...any) {
+func Infof(msg string, args ...interface{}) {
 	log.Infof(msg, args...)
 }
 
 // InfoIf logs a message in info level adding provided fields if condition is true.
-func InfoIf(condition bool, msg string, fields ...any) {
+func InfoIf(condition bool, msg string, fields ...interface{}) {
 	log.InfoIf(condition, msg, fields...)
 }
 
 // Warn logs a message in warning level adding provided fields using a global logger.
-func Warn(msg string, fields ...any) {
+func Warn(msg string, fields ...interface{}) {
 	log.Warn(msg, fields...)
 }
 
 // Warnf logs a formatted message in warn level adding provided fields after formatting args using a global logger.
-func Warnf(msg string, args ...any) {
+func Warnf(msg string, args ...interface{}) {
 	log.Warnf(msg, args...)
 }
 
 // WarnIf logs a message in warning level adding provided fields if condition is true.
-func WarnIf(condition bool, msg string, fields ...any) {
+func WarnIf(condition bool, msg string, fields ...interface{}) {
 	log.WarnIf(condition, msg, fields...)
 }
 
 // Err logs a provided error in error level adding provided fields using a global logger.
-func Err(err error, msg string, fields ...any) {
+func Err(err error, msg string, fields ...interface{}) {
 	log.Err(err, msg, fields...)
 }
 
 // ErrIf logs a provided error in error level adding provided fields if condition is true.
-func ErrIf(condition bool, err error, msg string, fields ...any) {
+func ErrIf(condition bool, err error, msg string, fields ...interface{}) {
 	log.ErrIf(condition, err, msg, fields...)
 }
 
 // Error logs a message in error level adding provided fields using a global logger.
-func Error(msg string, fields ...any) {
+func Error(msg string, fields ...interface{}) {
 	log.Error(msg, fields...)
 }
 
 // Errorf logs a formatted message in error level adding provided fields after formatting args using a global logger.
-func Errorf(msg string, args ...any) {
+func Errorf(msg string, args ...interface{}) {
 	log.Errorf(msg, args...)
 }
 
 // ErrorIf logs a message in error level adding provided fields if condition is true.
-func ErrorIf(condition bool, msg string, fields ...any) {
+func ErrorIf(condition bool, msg string, fields ...interface{}) {
 	log.ErrorIf(condition, msg, fields...)
 }
 
 // ErrStack logs a stack trace of provided error as message in error level adding fields.
-func ErrStack(err error, fields ...any) {
+func ErrStack(err error, fields ...interface{}) {
 	log.ErrStack(err, fields...)
 }
 
 // FatalIf logs a message in fatal level adding provided fields if condition is true, then calls os.Exit(1).
-func FatalIf(condition bool, v ...any) {
+func FatalIf(condition bool, v ...interface{}) {
 	log.FatalIf(condition, v...)
 }
 
 // Fatal logs a message in fatal level using fmt.Sprint to interpret args sing a global logger, then calls os.Exit(1).
-func Fatal(v ...any) {
+func Fatal(v ...interface{}) {
 	log.Fatal(v...)
 }
 
 // Fatalf logs a formatted message in fatal level using a global logger, then calls os.Exit(1).
-func Fatalf(format string, args ...any) {
+func Fatalf(format string, args ...interface{}) {
 	log.Fatalf(format, args...)
 }
 
 // Fatalln logs a message in fatal level using fmt.Sprintln to interpret args using a global logger, then calls os.Exit(1).
-func Fatalln(v ...any) {
+func Fatalln(v ...interface{}) {
 	log.Fatalln(v...)
 }
 
 // PanicIf logs a message in fatal level adding provided fields if condition is true, then calls panic().
-func PanicIf(condition bool, v ...any) {
+func PanicIf(condition bool, v ...interface{}) {
 	log.PanicIf(condition, v...)
 }
 
 // Panic logs a message in fatal level using fmt.Sprint to interpret args using a global logger, then calls panic().
-func Panic(v ...any) {
+func Panic(v ...interface{}) {
 	log.Panic(v...)
 }
 
 // Panicf logs a formatted message in fatal level using a global logger, then calls panic().
-func Panicf(format string, args ...any) {
+func Panicf(format string, args ...interface{}) {
 	log.Panicf(format, args...)
 }
 
 // Panicln logs a message in fatal level using fmt.Sprintln to interpret args using a global logger, then calls panic().
-func Panicln(v ...any) {
+func Panicln(v ...interface{}) {
 	log.Panicln(v...)
 }
 
 // Print logs a message without level using [fmt.Sprint] to interpret args using a global logger.
-func Print(v ...any) {
+func Print(v ...interface{}) {
 	log.Print(v...)
 }
 
 // PrintIf logs a message without level using [fmt.Sprint] to interpret args if condition is true.
-func PrintIf(condition bool, v ...any) {
+func PrintIf(condition bool, v ...interface{}) {
 	log.PrintIf(condition, v...)
 }
 
 // PrintStack logs a current stack trace.
-func PrintStack(v ...any) {
+func PrintStack(v ...interface{}) {
 	log.PrintStack(v...)
 }
 
 // Log logs a message without level using [fmt.Sprint] to interpret args using a global logger.
 // It is an alias for [Print].
-func Log(v ...any) {
+func Log(v ...interface{}) {
 	log.Log(v...)
 }
 
 // Printf logs a formatted message without level using a global logger.
-func Printf(format string, args ...any) {
+func Printf(format string, args ...interface{}) {
 	log.Printf(format, args...)
 }
 
 // Println writes a message without level using fmt.Sprintln to interpret args using a global logger.
-func Println(v ...any) {
+func Println(v ...interface{}) {
 	log.Println(v...)
 }
 

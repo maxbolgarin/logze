@@ -33,8 +33,8 @@ var Levels = []string{
 	LevelTrace, LevelDebug, LevelInfo, LevelWarn, LevelError, LevelFatal, LevelDisabled,
 }
 
-// LevelsAny is a list of all supported levels in any format.
-var LevelsAny = []any{
+// LevelsAny is a list of all supported levels in interface{} format.
+var LevelsAny = []interface{}{
 	LevelTrace, LevelDebug, LevelInfo, LevelWarn, LevelError, LevelFatal, LevelDisabled,
 }
 
@@ -180,7 +180,7 @@ func C(writers ...io.Writer) Config {
 //		WithLevel("info").
 //		WithAddCaller().
 //		New("service", "api", "version", "2.1.0")
-func (c Config) New(fields ...any) Logger {
+func (c Config) New(fields ...interface{}) Logger {
 	return New(c, fields...)
 }
 
@@ -192,7 +192,7 @@ func (c Config) New(fields ...any) Logger {
 // Example usage:
 //
 //	logger := config.Logger("component", "database", "driver", "postgres")
-func (c Config) Logger(fields ...any) Logger {
+func (c Config) Logger(fields ...interface{}) Logger {
 	return c.New(fields...)
 }
 
@@ -336,7 +336,7 @@ func (c Config) WithWriter(w io.Writer) Config {
 // it doesn't exist. The file is added to the list of output writers.
 //
 // Returns the updated config, a closer for the file (you should call Close()
-// when done), and any error that occurred during file opening.
+// when done), and interface{} error that occurred during file opening.
 //
 // Default file permissions are 0644 if not specified.
 //
@@ -532,7 +532,7 @@ func (c Config) WithBurstSampler(percentage float64, burst int, period time.Dura
 // WithMaxSampler returns [Config] with a new max sampler.
 // Max is the maximum number of requests allowed per period.
 // Period is a time interval after which the max count resets.
-// Any requests beyond the max limit will be dropped.
+// interface{} requests beyond the max limit will be dropped.
 // Levels is an optional list of levels that will be sampled. If no levels are provided,
 // the sampler will be used for all levels.
 //

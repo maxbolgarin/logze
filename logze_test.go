@@ -319,7 +319,7 @@ func TestNop(t *testing.T) {
 		t.Error("expected Nop logger to report as not inited")
 	}
 
-	// Test that Nop logger doesn't output anything
+	// Test that Nop logger doesn't output interface{}thing
 	var b bytes.Buffer
 	logger.Info("this should not appear")
 
