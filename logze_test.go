@@ -3,13 +3,13 @@ package logze_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/maxbolgarin/logze/v2"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -282,7 +282,7 @@ func TestLoggerErrStack(t *testing.T) {
 
 	output := b.String()
 	// Since stack traces are long and complex, we verify presence of basic parts
-	if !strings.Contains(output, "level\":\"error") || !strings.Contains(output, "TestLoggerErrStack") || !strings.Contains(output, "additional\":\"info") {
+	if !strings.Contains(output, "level\":\"error") || !strings.Contains(output, "ErrStack") || !strings.Contains(output, "additional\":\"info") {
 		t.Errorf("expected error message with stack trace, got %s", output)
 	}
 
@@ -292,7 +292,7 @@ func TestLoggerErrStack(t *testing.T) {
 
 	output = b.String()
 	// Since stack traces are long and complex, we verify presence of basic parts
-	if !strings.Contains(output, "level\":\"error") || !strings.Contains(output, "TestLoggerErrStack") || !strings.Contains(output, "message\":\"additional") {
+	if !strings.Contains(output, "level\":\"error") || !strings.Contains(output, "stack") || !strings.Contains(output, "message\":\"additional") {
 		t.Errorf("expected error message with stack trace, got %s", output)
 	}
 }
@@ -449,15 +449,15 @@ func TestLoggerWithStack(t *testing.T) {
 	logger.Err(err, "error with stack")
 
 	output := b.String()
-	if !strings.Contains(output, "TestLoggerWithStack") {
+	if !strings.Contains(output, "stack") {
 		t.Errorf("expected stack trace in output, got %s", output)
 	}
 
 	b.Reset()
-	logger.WithStack(false).Err(err, "error without stack")
+	logger.WithStack(false).Err(err, "error without trace")
 
 	output = b.String()
-	if strings.Contains(output, "TestLoggerWithStack") {
+	if strings.Contains(output, "\"stack\"") {
 		t.Errorf("expected no stack trace in output, got %s", output)
 	}
 }

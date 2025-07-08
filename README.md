@@ -489,8 +489,7 @@ logze.Info("User created", "email", email, "user_id", userID)
 Thoughts from benchmarks:
 * `logze` is about 3 times faster than `slog` and for 15% slower than `zerolog`
 * Format methods like `logze.Infof` or `Msgf` don't add big overhead (only 30% slower and +1 alloc)
-* `logze.Err` is slightly faster than `logze.Error`
-* Stack trace is very slow in `logze` and faster in `zerolog` and `slog`, but it's not recommended to use it in production, because it's very slow in all cases.
+* Stack trace is slow in all loggers, but `zerolog` is the fastest, `logze` slight slower and makes more allocations (price for easy of use).
 * Console writer is slow in `logze` and `zerolog` and should be used only in development (that the case when `slog` wins - if you want to use text writer in production)
 
 
@@ -504,9 +503,9 @@ cpu: Apple M1 Pro
 
 Logging `Info` and two fields:
 ```text
-BenchmarkZerologInfo-8                  14365629               151.3 ns/op             0 B/op          0 allocs/op
-BenchmarkLogzeInfo-8                    13851320               171.5 ns/op             0 B/op          0 allocs/op
-BenchmarkSLogInfo-8                      4491897               533.2 ns/op             0 B/op          0 allocs/op
+BenchmarkZerologInfo-8                   7689862               146.3 ns/op         0 B/op           0 allocs/op
+BenchmarkLogzeInfo-8                     6985168               184.1 ns/op         0 B/op           0 allocs/op
+BenchmarkSLogInfo-8                      2293354               523.7 ns/op         0 B/op           0 allocs/op
 ```
 
 Logging `Infof` (formatted) and two fields:
@@ -519,17 +518,17 @@ BenchmarkSLogInfoFormat-8                4026775               601.0 ns/op      
 
 Logging `Error` with error and two fields:
 ```text
-BenchmarkZerologError-8                 13900646               173.6 ns/op             0 B/op          0 allocs/op
-BenchmarkLogzeError-8                   10827030               221.7 ns/op             0 B/op          0 allocs/op
-BenchmarkSLogError-8                     3757587               635.7 ns/op             0 B/op          0 allocs/op
+BenchmarkZerologError-8                  7172144               166.6 ns/op         0 B/op           0 allocs/op
+BenchmarkLogzeError-8                    6193178               189.4 ns/op         0 B/op           0 allocs/op
+BenchmarkSLogError-8                     1930131               651.0 ns/op         0 B/op           0 allocs/op
 ```
 
 
 Logging `Error` with error, stack trace and two fields:
 ```text
-BenchmarkZerologErrorWithStack-8          545072               4379 ns/op            3298 B/op         73 allocs/op
-BenchmarkLogzeErrorWithStack-8            291956               8065 ns/op            5460 B/op         121 allocs/op
-BenchmarkSLogErrorWithStack-8             612562               3922 ns/op            1617 B/op         3 allocs/op
+BenchmarkZerologErrorWithStack-8          560763              2057 ns/op         824 B/op           7 allocs/op
+BenchmarkLogzeErrorWithStack-8            485652              2406 ns/op        1307 B/op          10 allocs/op
+BenchmarkSLogErrorWithStack-8             311107              3786 ns/op        1617 B/op           3 allocs/op
 ```
 
 
@@ -543,8 +542,9 @@ BenchmarkSLogInfoConsole-8               4058850               588.1 ns/op      
 
 Additional `logze` features
 ```text
-BenchmarkLogzeErr-8                     11857878               200.9 ns/op             0 B/op          0 allocs/op
-BenchmarkLogzeToIgnore5-8               10040202               238.5 ns/op             0 B/op          0 allocs/op
+BenchmarkLogzeErr-8                      6057480               206.1 ns/op         0 B/op            0 allocs/op
+BenchmarkLogzeToIgnore5-8                4703277               248.3 ns/op         64 B/op           1 allocs/op
+BenchmarkLogzeErrStack-8                  438679               2644 ns/op          768 B/op          18 allocs/op
 ```
 
 

@@ -4,13 +4,13 @@ package logze_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/debug"
 	"testing"
 
 	"github.com/maxbolgarin/logze/v2"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -114,7 +114,7 @@ func BenchmarkLogzeError(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		buffer.Reset()
-		logger.Error("error message", "error", err, "key", "value", "number", 123)
+		logger.Error("error message", err, "key", "value", "number", 123)
 	}
 }
 
@@ -138,13 +138,13 @@ func BenchmarkZerologErrorWithStack(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		buffer.Reset()
-		logger.Error().Stack().Err(errors.WithStack(err)).Str("key", "value").Int("number", 123).Msg("error message")
+		logger.Error().Stack().Err(logze.WithStack(err)).Str("key", "value").Int("number", 123).Msg("error message")
 	}
 }
 
 func BenchmarkLogzeErrorWithStack(b *testing.B) {
 	var buffer bytes.Buffer
-	logger := setupLogzeLogger(&buffer).WithStack(true)
+	logger := setupLogzeLogger(&buffer).WithStack()
 	err := errors.New("an error occurred")
 
 	for i := 0; i < b.N; i++ {
@@ -227,5 +227,16 @@ func BenchmarkLogzeToIgnore5(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		buffer.Reset()
 		logger.Error("error message", "error", err, "key", "value", "number", 123)
+	}
+}
+
+func BenchmarkLogzeErrStack(b *testing.B) {
+	var buffer bytes.Buffer
+	logger := setupLogzeLogger(&buffer)
+	err := errors.New("an error occurred")
+
+	for i := 0; i < b.N; i++ {
+		buffer.Reset()
+		logger.ErrStack(err, "key", "value", "number", 123)
 	}
 }

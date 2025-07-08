@@ -3,6 +3,7 @@ package logze
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,10 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/diode"
-	"github.com/rs/zerolog/pkgerrors"
 )
 
 // Logger represents a high-level structured logger with convenient methods.
@@ -143,8 +142,6 @@ func New(cfg Config, fields ...interface{}) Logger {
 	if cfg.Sampler != nil {
 		l = l.Sample(cfg.Sampler)
 	}
-
-	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
 	// Pre-compile ignore map for O(1) lookups
 	ignoreMap := make(map[string]struct{}, len(cfg.ToIgnore))
@@ -884,13 +881,7 @@ func (l Logger) ErrorIf(condition bool, msg string, fields ...interface{}) {
 // Note: The stack trace output can be quite verbose. Consider using Err() with WithStack()
 // for more structured error logging in production.
 func (l Logger) ErrStack(err error, fields ...interface{}) {
-	_, ok := err.(interface {
-		StackForLogger() []interface{}
-	})
-	if !ok {
-		err = errors.WithStack(err)
-	}
-	l.log(l.l.Error(), fmt.Sprintf("%+v", err), fields)
+	l.log(l.l.Error(), fmt.Sprintf("%+v", WithStack(err)), fields)
 }
 
 // Fatal logs a fatal error message and immediately terminates the program with exit code 1.
@@ -1256,6 +1247,8 @@ func (l Logger) logf(ev *zerolog.Event, msg string, args []interface{}) {
 	}
 }
 
+const stackKey = "stack"
+
 func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...interface{}) (*zerolog.Event, []interface{}) {
 	newFields := args
 	for i, a := range args {
@@ -1265,14 +1258,13 @@ func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...inte
 		}
 		if l.stackTrace {
 			// Hack to use github.com/maxbolgarin/errm without importing it
-			errmErr, ok := err.(interface {
-				StackForLogger() []interface{}
-			})
+			errmErr, ok := err.(errmStackTraceError)
 			if ok {
 				ev = ev.Fields(errmErr.StackForLogger())
 			} else {
-				ev = ev.Stack()
-				err = errors.WithStack(err)
+				// Directly capture stack trace without wrapping/unwrapping error
+				stack := CaptureStackTraceJSON()
+				ev = ev.RawJSON(stackKey, stack)
 			}
 		}
 		l.incErrorCounter(err)

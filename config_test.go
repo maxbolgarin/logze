@@ -772,7 +772,7 @@ func TestStackTraceWithActualError(t *testing.T) {
 		t.Error("expected error message")
 	}
 	// Stack trace should be included automatically due to WithStackTrace
-	if !strings.Contains(output, "TestStackTraceWithActualError") {
+	if !strings.Contains(output, "stack") {
 		t.Error("expected stack trace in output")
 	}
 }

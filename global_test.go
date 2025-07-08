@@ -2,6 +2,7 @@ package logze_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	stdlog "log"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/maxbolgarin/logze/v2"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
