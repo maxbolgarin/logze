@@ -6,6 +6,7 @@ import (
 	"fmt"
 	stdlog "log"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -191,13 +192,13 @@ func TestGlobalErrorCounter(t *testing.T) {
 	cfg := logze.NewConfig().WithErrorCounter(&ec).WithLevel(logze.LevelError)
 	logze.Init(cfg)
 
-	if ec.Count.Load() != 0 {
-		t.Errorf("expected 0, got %d", ec.Count.Load())
+	if atomic.LoadUint64(&ec.Count) != 0 {
+		t.Errorf("expected 0, got %d", atomic.LoadUint64(&ec.Count))
 	}
 
 	logze.Err(errors.New("error occurred"), "error test")
-	if ec.Count.Load() != 1 {
-		t.Errorf("expected 1, got %d", ec.Count.Load())
+	if atomic.LoadUint64(&ec.Count) != 1 {
+		t.Errorf("expected 1, got %d", atomic.LoadUint64(&ec.Count))
 	}
 }
 

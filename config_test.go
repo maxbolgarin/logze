@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -479,7 +480,7 @@ func TestSimpleErrorCounter(t *testing.T) {
 	counter := &logze.SimpleErrorCounter{}
 
 	// Test initial count
-	if counter.Count.Load() != 0 {
+	if atomic.LoadUint64(&counter.Count) != 0 {
 		t.Error("expected initial count to be 0")
 	}
 
@@ -487,23 +488,23 @@ func TestSimpleErrorCounter(t *testing.T) {
 	err := errors.New("test error")
 	counter.Inc(err)
 
-	if counter.Count.Load() != 1 {
-		t.Errorf("expected count to be 1 after increment, got %d", counter.Count.Load())
+	if atomic.LoadUint64(&counter.Count) != 1 {
+		t.Errorf("expected count to be 1 after increment, got %d", atomic.LoadUint64(&counter.Count))
 	}
 
 	// Test multiple increments
 	counter.Inc(err)
 	counter.Inc(err)
 
-	if counter.Count.Load() != 3 {
-		t.Errorf("expected count to be 3 after multiple increments, got %d", counter.Count.Load())
+	if atomic.LoadUint64(&counter.Count) != 3 {
+		t.Errorf("expected count to be 3 after multiple increments, got %d", atomic.LoadUint64(&counter.Count))
 	}
 
 	// Test increment with nil error (should still increment)
 	counter.Inc(nil)
 
-	if counter.Count.Load() != 4 {
-		t.Errorf("expected count to be 4 after nil error increment, got %d", counter.Count.Load())
+	if atomic.LoadUint64(&counter.Count) != 3 {
+		t.Errorf("expected count to be 3 after nil error increment, got %d", atomic.LoadUint64(&counter.Count))
 	}
 }
 
@@ -914,16 +915,16 @@ func TestErrorCounterInterface(t *testing.T) {
 	cfg.ErrorCounter.Inc(testErr)
 
 	simple := cfg.ErrorCounter.(*logze.SimpleErrorCounter)
-	if simple.Count.Load() != 1 {
-		t.Errorf("expected count 1, got %d", simple.Count.Load())
+	if atomic.LoadUint64(&simple.Count) != 1 {
+		t.Errorf("expected count 1, got %d", atomic.LoadUint64(&simple.Count))
 	}
 
 	// Test multiple increments
 	cfg.ErrorCounter.Inc(testErr)
 	cfg.ErrorCounter.Inc(testErr)
 
-	if simple.Count.Load() != 3 {
-		t.Errorf("expected count 3, got %d", simple.Count.Load())
+	if atomic.LoadUint64(&simple.Count) != 3 {
+		t.Errorf("expected count 3, got %d", atomic.LoadUint64(&simple.Count))
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -80,13 +81,13 @@ func TestLoggerErrorCounter(t *testing.T) {
 	cfg := logze.NewConfig().WithErrorCounter(&ec).WithLevel(logze.LevelError)
 	logger := logze.New(cfg)
 
-	if ec.Count.Load() != 0 {
-		t.Errorf("expected 0, got %d", ec.Count.Load())
+	if atomic.LoadUint64(&ec.Count) != 0 {
+		t.Errorf("expected 0, got %d", atomic.LoadUint64(&ec.Count))
 	}
 
 	logger.Err(errors.New("error occurred"), "error test")
-	if ec.Count.Load() != 1 {
-		t.Errorf("expected 1, got %d", ec.Count.Load())
+	if atomic.LoadUint64(&ec.Count) != 1 {
+		t.Errorf("expected 1, got %d", atomic.LoadUint64(&ec.Count))
 	}
 }
 
@@ -477,18 +478,18 @@ func TestLoggerWithSimpleErrorCounter(t *testing.T) {
 		t.Error("expected SimpleErrorCounter type")
 	}
 
-	if simpleCounter.Count.Load() != 0 {
-		t.Errorf("expected 0 initial count, got %d", simpleCounter.Count.Load())
+	if atomic.LoadUint64(&simpleCounter.Count) != 0 {
+		t.Errorf("expected 0 initial count, got %d", atomic.LoadUint64(&simpleCounter.Count))
 	}
 
 	logger.Error("test error")
-	if simpleCounter.Count.Load() != 0 {
-		t.Errorf("expected 0 count for Error (no actual error), got %d", simpleCounter.Count.Load())
+	if atomic.LoadUint64(&simpleCounter.Count) != 0 {
+		t.Errorf("expected 0 count for Error (no actual error), got %d", atomic.LoadUint64(&simpleCounter.Count))
 	}
 
 	logger.Err(errors.New("actual error"), "test")
-	if simpleCounter.Count.Load() != 1 {
-		t.Errorf("expected 1 count after Err, got %d", simpleCounter.Count.Load())
+	if atomic.LoadUint64(&simpleCounter.Count) != 1 {
+		t.Errorf("expected 1 count after Err, got %d", atomic.LoadUint64(&simpleCounter.Count))
 	}
 }
 
@@ -1044,8 +1045,8 @@ func TestLoggerErrorWithErrorInFields(t *testing.T) {
 	}
 
 	counter := logger.GetErrorCounter().(*logze.SimpleErrorCounter)
-	if counter.Count.Load() != 1 {
-		t.Errorf("expected 1 error counted, got %d", counter.Count.Load())
+	if atomic.LoadUint64(&counter.Count) != 1 {
+		t.Errorf("expected 1 error counted, got %d", atomic.LoadUint64(&counter.Count))
 	}
 }
 
@@ -1190,14 +1191,14 @@ func TestLoggerFieldsWithErrors(t *testing.T) {
 
 	// Error counter is incremented once per log call that contains errors, not per error
 	counter := logger.GetErrorCounter().(*logze.SimpleErrorCounter)
-	if counter.Count.Load() != 1 {
-		t.Errorf("expected 1 error counted (first error processed from fields), got %d", counter.Count.Load())
+	if atomic.LoadUint64(&counter.Count) != 1 {
+		t.Errorf("expected 1 error counted (first error processed from fields), got %d", atomic.LoadUint64(&counter.Count))
 	}
 
 	// Test additional error counting with Err method
 	logger.Err(err1, "actual error call")
-	if counter.Count.Load() != 2 {
-		t.Errorf("expected 2 errors counted after Err call, got %d", counter.Count.Load())
+	if atomic.LoadUint64(&counter.Count) != 2 {
+		t.Errorf("expected 2 errors counted after Err call, got %d", atomic.LoadUint64(&counter.Count))
 	}
 }
 

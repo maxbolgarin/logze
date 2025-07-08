@@ -647,7 +647,7 @@ type ErrorCounter interface {
 //		}
 //	}
 type SimpleErrorCounter struct {
-	Count atomic.Int64
+	Count uint64
 }
 
 // Inc increments the error counter by 1.
@@ -656,8 +656,11 @@ type SimpleErrorCounter struct {
 // logging occurs. The increment operation is atomic and safe for concurrent use.
 // The error parameter is currently unused but provided for interface compatibility
 // and potential future enhancements.
-func (c *SimpleErrorCounter) Inc(error) {
-	c.Count.Add(1)
+func (c *SimpleErrorCounter) Inc(err error) {
+	if err == nil {
+		return
+	}
+	atomic.AddUint64(&c.Count, 1)
 }
 
 func newSimpleErrorCounter() *SimpleErrorCounter {
