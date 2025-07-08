@@ -571,5 +571,5 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 [ci]: https://github.com/maxbolgarin/logze/actions
 [report-img]: https://goreportcard.com/badge/github.com/maxbolgarin/logze
 [report]: https://goreportcard.com/report/github.com/maxbolgarin/logze
-[coverage-img]: https://codecov.io/gh/maxbolgarin/logze/branch/main/graph/badge.svg
+[coverage-img]: https://codecov.io/gh/maxbolgarin/logze/branch/v2/graph/badge.svg
 [coverage]: https://codecov.io/gh/maxbolgarin/logze
