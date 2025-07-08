@@ -30,8 +30,8 @@ go get -u github.com/maxbolgarin/logze/v2
 **High Performance:**
 - 🚀 **3x faster** than standard `slog`
 - ⚡ Only **15% slower** than raw `zerolog`
-- 🎯 Zero allocations for most operations
-- 📈 High-throughput with optional non-blocking I/O
+- 🎯 Zero allocations for most operations (thanks to `zerolog`)
+- 📈 High-throughput with optional non-blocking I/O (thanks to `diode`)
 
 
 ## 📖 Table of Contents
@@ -325,16 +325,17 @@ logger := logze.New(logze.C().WithDisabled())
 This example shows advanced configuration options:
 
 ```go
-config := logze.NewConfig().
+logger := logze.NewConfig().
 	WithLevel(logze.LevelInfo).                     // Set log level
 	WithAddCaller().                               // Include caller info
 	WithStackTrace().                               // Enable stack traces
 	WithSimpleErrorCounter().                      // Count errors
 	WithToIgnore("health", "ping").               // Filter messages
 	WithTimeFieldFormat(time.RFC3339).           // Custom time format
-	WithNoDiode()                                // Disable buffering
+	WithNoDiode().                                // Disable buffering
+   New("service", "api", "version", "2.1.0")    // Create logger based on config
 
-logger := logze.New(config, "service", "api", "version", "2.1.0")
+logger.Info("health check") // Won't be printed
 ```
 
 **Advanced features explained:**
@@ -359,8 +360,7 @@ logger := logze.New(config, "service", "api", "version", "2.1.0")
    - **Use case**: When you need guaranteed log delivery (e.g., before program exit)
    - **Trade-off**: Better reliability but worse performance
 
-6. **Default fields**: `"service", "api", "version", "2.1.0"` are added to every log
-   - **Use case**: Consistent metadata across all logs from this logger instance
+6. **`New()`**: Allows to create a logger from config, fields `"service", "api", "version", "2.1.0"` are added to every log
 
 ## 🌍 Global Logger
 
@@ -481,7 +481,6 @@ logze.Info("User created", "email", email, "user_id", userID)
 ### Cons
 
 - **📈 Slight Overhead**: ~15% slower than raw `zerolog` due to field abstraction
-- **🧠 Learning Curve**: Advanced features (diode, sampling) may be complex for beginners
 - **💾 Message Loss Risk**: Default diode buffering can drop messages under extreme load
 - **🎨 Console Performance**: Text/console output is significantly slower than JSON
 
@@ -565,7 +564,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ---
 
-[version-img]: https://img.shields.io/badge/Go-%3E%3D%201.21-%23007d9c
+[version-img]: https://img.shields.io/badge/Go-%3E%3D%201.15-%23007d9c
 [doc-img]: https://pkg.go.dev/badge/github.com/maxbolgarin/logze
 [doc]: https://pkg.go.dev/github.com/maxbolgarin/logze
 [ci-img]: https://github.com/maxbolgarin/logze/actions/workflows/go.yml/badge.svg
