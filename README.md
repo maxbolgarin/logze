@@ -565,11 +565,11 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ---
 
 [version-img]: https://img.shields.io/badge/Go-%3E%3D%201.17-%23007d9c
-[doc-img]: https://pkg.go.dev/badge/github.com/maxbolgarin/logze
-[doc]: https://pkg.go.dev/github.com/maxbolgarin/logze
+[doc-img]: https://pkg.go.dev/badge/github.com/maxbolgarin/logze/v2
+[doc]: https://pkg.go.dev/github.com/maxbolgarin/logze/v2
 [ci-img]: https://github.com/maxbolgarin/logze/actions/workflows/go.yml/badge.svg
 [ci]: https://github.com/maxbolgarin/logze/actions
-[report-img]: https://goreportcard.com/badge/github.com/maxbolgarin/logze
-[report]: https://goreportcard.com/report/github.com/maxbolgarin/logze
+[report-img]: https://goreportcard.com/badge/github.com/maxbolgarin/logze/v2
+[report]: https://goreportcard.com/report/github.com/maxbolgarin/logze/v2
 [coverage-img]: https://codecov.io/gh/maxbolgarin/logze/branch/v2/graph/badge.svg
-[coverage]: https://codecov.io/gh/maxbolgarin/logze
+[coverage]: https://codecov.io/gh/maxbolgarin/logze/branch/v2
