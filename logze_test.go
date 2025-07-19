@@ -1309,7 +1309,7 @@ func (m mockErroError) AllFields() []interface{} {
 func TestLoggerErro(t *testing.T) {
 	tests := []struct {
 		name           string
-		err            logze.ErroError
+		err            error
 		msg            string
 		fields         []interface{}
 		expectedLevel  string
@@ -1397,6 +1397,16 @@ func TestLoggerErro(t *testing.T) {
 				"float_field": 3.14,
 				"array":       []interface{}{"a", "b"},
 				"map":         map[string]interface{}{"key": float64(1)},
+			},
+		},
+		{
+			name:          "simple error",
+			err:           errors.New("simple error"),
+			msg:           "msg",
+			expectedLevel: "error",
+			expectedMsg:   "msg",
+			expectedFields: map[string]interface{}{
+				"error": "simple error",
 			},
 		},
 	}

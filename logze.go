@@ -904,7 +904,12 @@ type ErroError interface {
 //
 // Note: This method is useful when you have an error that implements the ErroError interface.
 // If you have a regular error, use the Err() method instead.
-func (l Logger) Erro(err ErroError, msg string, fields ...interface{}) {
+func (l Logger) Erro(errRaw error, msg string, fields ...interface{}) {
+	err, ok := errRaw.(ErroError)
+	if !ok {
+		l.Err(errRaw, msg, fields...)
+		return
+	}
 	erroFields := err.AllFields()
 	if l.errCounter != nil {
 		l.errCounter.Inc(err)
