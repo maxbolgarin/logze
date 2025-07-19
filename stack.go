@@ -82,15 +82,10 @@ func WithStack(err error) error {
 	}
 }
 
-type genericStackTraceError interface {
-	StackTrace() stackTrace
-}
-
-type errmStackTraceError interface {
-	StackForLogger() []interface{}
-}
-
 // Custom stack trace implementation to replace pkg/errors functionality
+type genericStackTraceError interface {
+	StackTrace() []uintptr
+}
 
 // stackTrace represents a stack trace captured at runtime
 type stackTrace []uintptr

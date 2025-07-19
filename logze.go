@@ -884,6 +884,43 @@ func (l Logger) ErrStack(err error, fields ...interface{}) {
 	l.log(l.l.Error(), fmt.Sprintf("%+v", WithStack(err)), fields)
 }
 
+// ErroError is an interface that represents an error that can be logged with a message and fields.
+// This in an Error interface from github.com/maxbolgarin/erro.
+type ErroError interface {
+	error
+	Message() string
+	AllFields() []interface{}
+}
+
+// Erro logs an error with a message and fields.
+//
+// This method logs the error message and fields.
+//
+// Example usage:
+//
+//	err := erro.New("error occurred", "user_id", userID)
+//	logger.Erro(err, "")
+//	// Logs the error message with user_id as a field
+//
+// Note: This method is useful when you have an error that implements the ErroError interface.
+// If you have a regular error, use the Err() method instead.
+func (l Logger) Erro(err ErroError, msg string, fields ...interface{}) {
+	erroFields := err.AllFields()
+	if l.errCounter != nil {
+		l.errCounter.Inc(err)
+	}
+	if msg == "" {
+		l.log(l.l.Error(), err.Message(), append(fields, erroFields...))
+		return
+	}
+
+	newFields := make([]interface{}, 0, len(fields)+len(erroFields)+2)
+	newFields = append(newFields, "error", err.Message())
+	newFields = append(newFields, fields...)
+	newFields = append(newFields, erroFields...)
+	l.log(l.l.Error(), msg, newFields)
+}
+
 // Fatal logs a fatal error message and immediately terminates the program with exit code 1.
 //
 // ⚠️  WARNING: This method calls os.Exit(1) after logging, terminating the program.
@@ -1257,16 +1294,10 @@ func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...inte
 			continue
 		}
 		if l.stackTrace {
-			// Hack to use github.com/maxbolgarin/errm without importing it
-			errmErr, ok := err.(errmStackTraceError)
-			if ok {
-				ev = ev.Fields(errmErr.StackForLogger())
-			} else {
-				// Directly capture stack trace without wrapping/unwrapping error
-				stack := CaptureStackTraceJSON()
-				ev = ev.RawJSON(stackKey, stack)
-			}
+			stack := CaptureStackTraceJSON()
+			ev = ev.RawJSON(stackKey, stack)
 		}
+
 		l.incErrorCounter(err)
 		if !inFormat {
 			// Remove the error from fields to avoid duplicate logging

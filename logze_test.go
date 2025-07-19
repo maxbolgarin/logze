@@ -1287,3 +1287,280 @@ func TestLoggerToIgnoreWithFormattedEdgeCases(t *testing.T) {
 		t.Error("expected normal message to appear")
 	}
 }
+
+// mockErroError implements the ErroError interface for testing
+type mockErroError struct {
+	message string
+	fields  []interface{}
+}
+
+func (m mockErroError) Error() string {
+	return m.message
+}
+
+func (m mockErroError) Message() string {
+	return m.message
+}
+
+func (m mockErroError) AllFields() []interface{} {
+	return m.fields
+}
+
+func TestLoggerErro(t *testing.T) {
+	tests := []struct {
+		name           string
+		err            logze.ErroError
+		msg            string
+		fields         []interface{}
+		expectedLevel  string
+		expectedMsg    string
+		expectedFields map[string]interface{}
+	}{
+		{
+			name: "empty message - logs error message with fields",
+			err: mockErroError{
+				message: "database connection failed",
+				fields:  []interface{}{"host", "localhost", "port", 5432},
+			},
+			msg:           "",
+			fields:        []interface{}{"user_id", 123},
+			expectedLevel: "error",
+			expectedMsg:   "database connection failed",
+			expectedFields: map[string]interface{}{
+				"user_id": float64(123),
+				"host":    "localhost",
+				"port":    float64(5432),
+			},
+		},
+		{
+			name: "non-empty message - logs message with error field and all fields",
+			err: mockErroError{
+				message: "database connection failed",
+				fields:  []interface{}{"host", "localhost", "port", 5432},
+			},
+			msg:           "Failed to connect to database",
+			fields:        []interface{}{"user_id", 123, "retry_count", 3},
+			expectedLevel: "error",
+			expectedMsg:   "Failed to connect to database",
+			expectedFields: map[string]interface{}{
+				"error":       "database connection failed",
+				"user_id":     float64(123),
+				"retry_count": float64(3),
+				"host":        "localhost",
+				"port":        float64(5432),
+			},
+		},
+		{
+			name: "empty fields in error",
+			err: mockErroError{
+				message: "simple error",
+				fields:  []interface{}{},
+			},
+			msg:           "Something went wrong",
+			fields:        []interface{}{"component", "auth"},
+			expectedLevel: "error",
+			expectedMsg:   "Something went wrong",
+			expectedFields: map[string]interface{}{
+				"error":     "simple error",
+				"component": "auth",
+			},
+		},
+		{
+			name: "no additional fields",
+			err: mockErroError{
+				message: "validation error",
+				fields:  []interface{}{"field", "email", "value", "invalid@email"},
+			},
+			msg:           "Validation failed",
+			fields:        []interface{}{},
+			expectedLevel: "error",
+			expectedMsg:   "Validation failed",
+			expectedFields: map[string]interface{}{
+				"error": "validation error",
+				"field": "email",
+				"value": "invalid@email",
+			},
+		},
+		{
+			name: "complex field types",
+			err: mockErroError{
+				message: "complex error",
+				fields:  []interface{}{"array", []string{"a", "b"}, "map", map[string]int{"key": 1}},
+			},
+			msg:           "Complex operation failed",
+			fields:        []interface{}{"bool_field", true, "float_field", 3.14},
+			expectedLevel: "error",
+			expectedMsg:   "Complex operation failed",
+			expectedFields: map[string]interface{}{
+				"error":       "complex error",
+				"bool_field":  true,
+				"float_field": 3.14,
+				"array":       []interface{}{"a", "b"},
+				"map":         map[string]interface{}{"key": float64(1)},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var b bytes.Buffer
+			cfg := logze.NewConfig(&b).WithLevel(logze.LevelError).WithNoDiode()
+			logger := logze.New(cfg)
+
+			logger.Erro(tt.err, tt.msg, tt.fields...)
+
+			output := b.String()
+
+			// Check log level
+			if !strings.Contains(output, fmt.Sprintf(`"level":"%s"`, tt.expectedLevel)) {
+				t.Errorf("expected log level %s, got %s", tt.expectedLevel, output)
+			}
+
+			// Check message
+			if !strings.Contains(output, tt.expectedMsg) {
+				t.Errorf("expected log message '%s', got %s", tt.expectedMsg, output)
+			}
+
+			// Check fields
+			for field, expectedValue := range tt.expectedFields {
+				switch v := expectedValue.(type) {
+				case string:
+					if !strings.Contains(output, fmt.Sprintf(`"%s":"%s"`, field, v)) {
+						t.Errorf("expected field '%s' with value '%s', got %s", field, v, output)
+					}
+				case float64:
+					if !strings.Contains(output, fmt.Sprintf(`"%s":%g`, field, v)) {
+						t.Errorf("expected field '%s' with value %g, got %s", field, v, output)
+					}
+				case bool:
+					if !strings.Contains(output, fmt.Sprintf(`"%s":%t`, field, v)) {
+						t.Errorf("expected field '%s' with value %t, got %s", field, v, output)
+					}
+				case []interface{}:
+					// For arrays, we check if the array elements are present
+					for _, elem := range v {
+						if str, ok := elem.(string); ok {
+							if !strings.Contains(output, fmt.Sprintf(`"%s"`, str)) {
+								t.Errorf("expected array element '%s' in field '%s', got %s", str, field, output)
+							}
+						}
+					}
+				case map[string]interface{}:
+					// For maps, we check if the map key is present
+					for k := range v {
+						if !strings.Contains(output, fmt.Sprintf(`"%s"`, k)) {
+							t.Errorf("expected map key '%s' in field '%s', got %s", k, field, output)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestLoggerErroWithErrorCounter(t *testing.T) {
+	var ec logze.SimpleErrorCounter
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithErrorCounter(&ec).WithLevel(logze.LevelError).WithNoDiode()
+	logger := logze.New(cfg)
+
+	err := mockErroError{
+		message: "test error",
+		fields:  []interface{}{"test_field", "test_value"},
+	}
+
+	initialCount := atomic.LoadUint64(&ec.Count)
+	logger.Erro(err, "Test message")
+	finalCount := atomic.LoadUint64(&ec.Count)
+
+	// Erro method should not increment error counter since it doesn't pass error to setErrorWithStack
+	if finalCount != initialCount+1 {
+		t.Errorf("expected error counter to be incremented, got %d", finalCount)
+	}
+}
+
+func TestLoggerErroWithStack(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelError).WithNoDiode().WithStackTrace()
+	logger := logze.New(cfg)
+
+	err := mockErroError{
+		message: "stack trace error",
+		fields:  []interface{}{"component", "test"},
+	}
+
+	logger.Erro(err, "Stack trace test")
+
+	output := b.String()
+
+	// Should not contain stack trace since ErroError doesn't implement error interface
+	if strings.Contains(output, `"stack"`) {
+		t.Errorf("expected no stack trace for ErroError, got %s", output)
+	}
+}
+
+func TestLoggerErroWithIgnore(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelError).WithNoDiode().WithToIgnore("This should be ignored")
+	logger := logze.New(cfg)
+
+	err := mockErroError{
+		message: "ignore this error",
+		fields:  []interface{}{"field", "value"},
+	}
+
+	logger.Erro(err, "This should be ignored")
+
+	output := b.String()
+	if strings.Contains(output, "This should be ignored") {
+		t.Errorf("expected message to be ignored, got %s", output)
+	}
+}
+
+func TestLoggerErroWithSubstringIgnore(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelError).WithNoDiode().WithToIgnore("ignore")
+	logger := logze.New(cfg)
+
+	err := mockErroError{
+		message: "this should be ignored because it contains ignore",
+		fields:  []interface{}{"field", "value"},
+	}
+
+	logger.Erro(err, "This should be ignored")
+
+	output := b.String()
+	if strings.Contains(output, "this should be ignored because it contains ignore") {
+		t.Errorf("expected message to be ignored due to substring match, got %s", output)
+	}
+}
+
+func TestLoggerErroWithLoggerFields(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelError).WithNoDiode()
+	logger := logze.New(cfg).WithFields("service", "api", "version", "1.0")
+
+	err := mockErroError{
+		message: "test error",
+		fields:  []interface{}{"error_field", "error_value"},
+	}
+
+	logger.Erro(err, "Test message", "request_id", "abc123")
+
+	output := b.String()
+
+	// Should include logger fields, error fields, and additional fields
+	expectedFields := []string{
+		`"service":"api"`,
+		`"version":"1.0"`,
+		`"error":"test error"`,
+		`"error_field":"error_value"`,
+		`"request_id":"abc123"`,
+	}
+
+	for _, field := range expectedFields {
+		if !strings.Contains(output, field) {
+			t.Errorf("expected field '%s', got %s", field, output)
+		}
+	}
+}
