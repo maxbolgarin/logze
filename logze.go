@@ -375,8 +375,15 @@ func (l Logger) NotInited() bool {
 //
 // Fields can be interface{} JSON-serializable values: strings, numbers, booleans, slices, maps.
 func (l Logger) WithFields(fields ...interface{}) Logger {
-	l.l = l.l.With().Fields(fields).Logger()
-	return l
+	return Logger{
+		l:           l.l.With().Fields(fields).Logger(),
+		errCounter:  l.errCounter,
+		toIgnore:    l.toIgnore,
+		ignoreMap:   l.ignoreMap,
+		stackTrace:  l.stackTrace,
+		inited:      l.inited,
+		diodeWriter: l.diodeWriter,
+	}
 }
 
 // With is a convenient shorthand for [Logger.WithFields].
