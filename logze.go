@@ -82,6 +82,14 @@ type Logger struct {
 //   - Call logger.Close() or logger.CloseDiode() before application exit
 //   - Use cfg.WithNoDiode() to disable diode and ensure immediate writes
 //   - Note: Disabling diode may cause blocking if writing to stderr with high log volume
+//
+// ⚠️  IMPORTANT: Global Time Format Side Effect
+//
+// Setting cfg.TimeFieldFormat modifies the global zerolog.TimeFieldFormat variable,
+// which affects ALL zerolog loggers in the application, not just this logze instance.
+// This is a limitation of the underlying zerolog library. If you have multiple logger
+// configurations with different time formats, the last one created will take effect
+// for all loggers.
 func New(cfg Config, fields ...interface{}) Logger {
 	if len(cfg.Writers) == 0 || cfg.Level == LevelDisabled {
 		cfg.Writers = []io.Writer{io.Discard}
@@ -331,6 +339,11 @@ func GetFromContext(ctx context.Context) Logger {
 //	logger.Update(prodConfig, "environment", "production")
 //	logger.Info("This won't be logged due to warn level")
 func (l *Logger) Update(cfg Config, fields ...interface{}) {
+	// Close the old diode writer to prevent goroutine leak
+	if l.diodeWriter != nil {
+		l.diodeWriter.Close()
+	}
+
 	newLogger := New(cfg, fields...)
 	l.l = newLogger.l
 	l.inited = newLogger.inited

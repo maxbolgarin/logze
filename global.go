@@ -107,6 +107,8 @@ func Init(cfg Config, fields ...interface{}) {
 //
 // ⚠️ THREAD SAFETY WARNING: This function is NOT safe for concurrent use.
 // Ensure no other goroutines are using the global logger while calling Update.
+// Consider using a mutex or other synchronization mechanism if you need to
+// update the global logger from multiple goroutines.
 //
 // Example usage:
 //

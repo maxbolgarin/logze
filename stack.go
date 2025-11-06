@@ -101,6 +101,11 @@ func (s *stackError) Error() string {
 	return s.err.Error()
 }
 
+// StackTrace implements the genericStackTraceError interface
+func (s *stackError) StackTrace() []uintptr {
+	return s.stack
+}
+
 // Format implements the fmt.Formatter interface for detailed error formatting
 func (s *stackError) Format(st fmt.State, verb rune) {
 	switch verb {
