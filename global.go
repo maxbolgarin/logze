@@ -1,7 +1,9 @@
 package logze
 
 import (
+	"context"
 	stdlog "log"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -488,4 +490,247 @@ func Write(p []byte) (n int, err error) {
 // Raw returns Logger's underlying [zerolog.Logger] from global logger.
 func Raw() *zerolog.Logger {
 	return log.Raw()
+}
+
+// HTTP logs an HTTP request at debug level with standardized fields using a global logger.
+// This function is thread-safe.
+//
+// Parameters:
+//   - method: HTTP method (GET, POST, etc.)
+//   - path: Request path
+//   - status: HTTP status code
+//   - duration: Request processing duration
+//   - fields: Additional key-value pairs to include
+//
+// Example usage:
+//
+//	start := time.Now()
+//	// ... handle request
+//	logze.HTTP("GET", "/api/users", 200, time.Since(start), "user_id", userID)
+func HTTP(method, path string, status int, duration time.Duration, fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.HTTP(method, path, status, duration, fields...)
+}
+
+// HTTPError logs an HTTP request error at error level with standardized fields using a global logger.
+// This function is thread-safe.
+//
+// Parameters:
+//   - method: HTTP method (GET, POST, etc.)
+//   - path: Request path
+//   - status: HTTP status code
+//   - err: The error that occurred
+//   - fields: Additional key-value pairs to include
+//
+// Example usage:
+//
+//	if err != nil {
+//	    logze.HTTPError("POST", "/api/orders", 500, err, "order_id", orderID)
+//	}
+func HTTPError(method, path string, status int, err error, fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.HTTPError(method, path, status, err, fields...)
+}
+
+// HTTPAuto automatically selects the appropriate log level based on HTTP status code and error using a global logger.
+// This function is thread-safe.
+//
+// Log levels:
+//   - Error level: If err is not nil OR status >= 500 (server errors)
+//   - Warn level: If status >= 400 (client errors)
+//   - Debug level: Otherwise (success)
+//
+// Parameters:
+//   - method: HTTP method (GET, POST, etc.)
+//   - path: Request path
+//   - status: HTTP status code
+//   - duration: Request processing duration
+//   - err: Optional error (can be nil)
+//   - fields: Additional key-value pairs to include
+//
+// Example usage:
+//
+//	start := time.Now()
+//	resp, err := client.Call()
+//	logze.HTTPAuto("GET", "/api/products", resp.StatusCode, time.Since(start), err, "product_id", prodID)
+func HTTPAuto(method, path string, status int, duration time.Duration, err error, fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.HTTPAuto(method, path, status, duration, err, fields...)
+}
+
+// Recover recovers from panics and logs them at error level with stack trace using a global logger.
+// This function should be called with defer to catch and log panics. This function is thread-safe.
+//
+// If a panic occurs, it:
+//   - Recovers from the panic
+//   - Logs the panic value at error level
+//   - Includes the full stack trace in the log
+//   - Includes any additional fields provided
+//
+// The panic is caught and logged, but not re-thrown. If you need to re-throw
+// the panic after logging, use RecoverPanicWithCallback and call panic() in the callback.
+//
+// Parameters:
+//   - fields: Optional key-value pairs to include in the panic log
+//
+// Example usage:
+//
+//	func handleRequest(reqID string) {
+//	    defer logze.Recover("request_id", reqID)
+//
+//	    // ... code that might panic
+//	    processData()
+//	}
+func Recover(fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	if r := recover(); r != nil {
+		stack := debug.Stack()
+		f := make([]interface{}, 0, len(fields)+2)
+		f = append(f, "error", r)
+		f = append(f, fields...)
+		l.Error(string(stack), f...)
+	}
+}
+
+// RecoverWithCallback recovers from panics, logs them, and executes a callback function using a global logger.
+// This function should be called with defer to catch and log panics with custom handling. This function is thread-safe.
+//
+// If a panic occurs, it:
+//   - Recovers from the panic
+//   - Logs the panic value at error level with stack trace
+//   - Executes the provided callback function with the panic value
+//   - Includes any additional fields provided
+//
+// Parameters:
+//   - callback: Function to call if a panic occurs (receives the panic value)
+//   - fields: Optional key-value pairs to include in the panic log
+//
+// Example usage:
+//
+//	func handleRequest(metrics *Metrics) {
+//	    defer logze.RecoverWithCallback(func(p interface{}) {
+//	        metrics.IncrementPanicCounter()
+//	        alerts.SendPanicAlert(p)
+//	    }, "request_id", reqID)
+//
+//	    // ... code that might panic
+//	}
+func RecoverWithCallback(callback func(interface{}), fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	// We need to call the method directly to ensure recover() works in the defer chain
+	if r := recover(); r != nil {
+		stack := debug.Stack()
+		f := make([]interface{}, 0, len(fields)+2)
+		f = append(f, "error", r)
+		f = append(f, fields...)
+		l.Error(string(stack), f...)
+		if callback != nil {
+			callback(r)
+		}
+	}
+}
+
+// InfoCtx logs a message at info level, checking context cancellation first using a global logger.
+// This function is thread-safe.
+//
+// If the context is cancelled (Done channel is closed), this function returns
+// immediately without logging. This prevents unnecessary logging operations
+// when the request/operation has been cancelled.
+//
+// Parameters:
+//   - ctx: Context to check for cancellation
+//   - msg: Log message
+//   - fields: Optional key-value pairs
+//
+// Example usage:
+//
+//	func handleRequest(ctx context.Context) {
+//	    logze.InfoCtx(ctx, "Processing request", "user_id", 123)
+//	    // If request is cancelled, log won't be written
+//	}
+func InfoCtx(ctx context.Context, msg string, fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.InfoCtx(ctx, msg, fields...)
+}
+
+// DebugCtx logs a message at debug level, checking context cancellation first using a global logger.
+// This function is thread-safe.
+// See InfoCtx for details about context checking behavior.
+func DebugCtx(ctx context.Context, msg string, fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.DebugCtx(ctx, msg, fields...)
+}
+
+// TraceCtx logs a message at trace level, checking context cancellation first using a global logger.
+// This function is thread-safe.
+// See InfoCtx for details about context checking behavior.
+func TraceCtx(ctx context.Context, msg string, fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.TraceCtx(ctx, msg, fields...)
+}
+
+// WarnCtx logs a message at warn level, checking context cancellation first using a global logger.
+// This function is thread-safe.
+// See InfoCtx for details about context checking behavior.
+func WarnCtx(ctx context.Context, msg string, fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.WarnCtx(ctx, msg, fields...)
+}
+
+// ErrorCtx logs a message at error level, checking context cancellation first using a global logger.
+// This function is thread-safe.
+// See InfoCtx for details about context checking behavior.
+func ErrorCtx(ctx context.Context, msg string, fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.ErrorCtx(ctx, msg, fields...)
+}
+
+// ErrCtx logs an error with message at error level, checking context cancellation first using a global logger.
+// This function is thread-safe.
+//
+// This function combines error logging with context cancellation checking.
+// Unlike ErrorCtx which logs a message at error level, ErrCtx specifically
+// logs an error object along with a message.
+//
+// Parameters:
+//   - ctx: Context to check for cancellation
+//   - err: Error to log
+//   - msg: Log message
+//   - fields: Optional key-value pairs
+//
+// Example usage:
+//
+//	func processData(ctx context.Context) error {
+//	    result, err := fetchData()
+//	    if err != nil {
+//	        logze.ErrCtx(ctx, err, "Failed to fetch data", "retry_count", 3)
+//	        return err
+//	    }
+//	    return nil
+//	}
+func ErrCtx(ctx context.Context, err error, msg string, fields ...interface{}) {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.ErrCtx(ctx, err, msg, fields...)
 }

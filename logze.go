@@ -1270,18 +1270,6 @@ func (l Logger) GetErrorCounter() ErrorCounter {
 //
 // This method inspects the underlying zerolog logger and returns the configured
 // log level. Useful for runtime debugging and configuration validation.
-//
-// Returns one of: "trace", "debug", "info", "warn", "error", "fatal", "panic", "disabled"
-//
-// Example usage:
-//
-//	logger := logze.New(logze.C().WithLevel("debug"))
-//	level := logger.GetLevel()
-//	fmt.Printf("Current log level: %s\n", level) // Output: "Current log level: debug"
-//
-//	if logger.GetLevel() == "debug" {
-//	    fmt.Println("Debug logging is enabled")
-//	}
 func (l Logger) GetLevel() string {
 	level := l.l.GetLevel()
 	return level.String()
@@ -1291,27 +1279,6 @@ func (l Logger) GetLevel() string {
 //
 // This method is useful for conditionally performing expensive operations only
 // when the log level would actually be output.
-//
-// Parameters:
-//   - level: Log level to check ("trace", "debug", "info", "warn", "error", "fatal")
-//
-// Returns true if the specified level would be logged, false otherwise.
-// Returns false for invalid level strings.
-//
-// Example usage:
-//
-//	logger := logze.New(logze.C().WithLevel("info"))
-//
-//	if logger.IsEnabled("debug") {
-//	    // This won't execute since debug < info
-//	    result := expensiveDebugOperation()
-//	    logger.Debug("Operation result", "result", result)
-//	}
-//
-//	if logger.IsEnabled("info") {
-//	    // This will execute
-//	    logger.Info("Processing started")
-//	}
 func (l Logger) IsEnabled(level string) bool {
 	lvl, err := zerolog.ParseLevel(level)
 	if err != nil {
@@ -1324,23 +1291,6 @@ func (l Logger) IsEnabled(level string) bool {
 //
 // This method checks whether error counting is enabled for this logger instance.
 // Useful for conditional logic that depends on error tracking being available.
-//
-// Example usage:
-//
-//	logger := logze.New(logze.C().WithSimpleErrorCounter())
-//
-//	if logger.HasErrorCounter() {
-//	    // Error counter is available
-//	    counter := logger.GetErrorCounter()
-//	    if simple, ok := counter.(*logze.SimpleErrorCounter); ok {
-//	        errorCount := simple.Count.Load()
-//	        if errorCount > 100 {
-//	            fmt.Println("High error rate detected!")
-//	        }
-//	    }
-//	} else {
-//	    fmt.Println("Error counting not enabled")
-//	}
 func (l Logger) HasErrorCounter() bool {
 	return l.errCounter != nil
 }
@@ -1349,28 +1299,6 @@ func (l Logger) HasErrorCounter() bool {
 //
 // This method checks whether non-blocking asynchronous logging is enabled via
 // a diode writer. Useful for understanding the logger's performance characteristics.
-//
-// When diode is enabled:
-//   - Logging calls don't block on I/O
-//   - Messages are buffered and written asynchronously
-//   - High throughput scenarios benefit from reduced latency
-//   - Messages may be dropped if buffer fills up
-//
-// When diode is disabled (WithNoDiode()):
-//   - Logging calls block until written
-//   - Guaranteed message delivery
-//   - Lower throughput, higher latency
-//
-// Example usage:
-//
-//	logger := logze.New(logze.C().WithConsoleJSON()) // Diode enabled by default
-//
-//	if logger.HasDiode() {
-//	    fmt.Println("Non-blocking async logging enabled")
-//	    // Remember to call logger.Close() before exit to flush pending messages
-//	} else {
-//	    fmt.Println("Blocking synchronous logging")
-//	}
 func (l Logger) HasDiode() bool {
 	return l.diodeWriter != nil
 }
@@ -1604,7 +1532,7 @@ func (l Logger) HTTPAuto(method, path string, status int, duration time.Duration
 	}
 }
 
-// RecoverPanic recovers from panics and logs them at error level with stack trace.
+// Recover recovers from panics and logs them at error level with stack trace.
 // This method should be called with defer to catch and log panics.
 //
 // If a panic occurs, it:
@@ -1622,32 +1550,32 @@ func (l Logger) HTTPAuto(method, path string, status int, duration time.Duration
 // Example usage:
 //
 //	func handleRequest(logger logze.Logger, reqID string) {
-//	    defer logger.RecoverPanic("request_id", reqID)
+//	    defer logger.Recover("request_id", reqID)
 //
 //	    // ... code that might panic
 //	    processData()
 //	}
 //
 //	func criticalOperation(logger logze.Logger) {
-//	    defer logger.RecoverPanic("operation", "critical", "module", "payment")
+//	    defer logger.Recover("operation", "critical", "module", "payment")
 //
 //	    // ... code that might panic
 //	}
 //
 // Example output:
 //
-//	{"level":"error","message":"Panic recovered","panic":"runtime error: index out of range","stack":"...","request_id":"abc123"}
-func (l Logger) RecoverPanic(fields ...interface{}) {
+//	{"level":"error","message":"... stack trace ...","error":"runtime error: index out of range","request_id":"abc123"}
+func (l Logger) Recover(fields ...interface{}) {
 	if r := recover(); r != nil {
 		stack := debug.Stack()
-		l.Error("Panic recovered",
-			append(fields,
-				"panic", r,
-				"stack", string(stack))...)
+		f := make([]interface{}, 0, len(fields)+2)
+		f = append(f, "error", r)
+		f = append(f, fields...)
+		l.Error(string(stack), f...)
 	}
 }
 
-// RecoverPanicWithCallback recovers from panics, logs them, and executes a callback function.
+// RecoverWithCallback recovers from panics, logs them, and executes a callback function.
 // This method should be called with defer to catch and log panics with custom handling.
 //
 // If a panic occurs, it:
@@ -1669,7 +1597,7 @@ func (l Logger) RecoverPanic(fields ...interface{}) {
 // Example usage:
 //
 //	func handleRequest(logger logze.Logger, metrics *Metrics) {
-//	    defer logger.RecoverPanicWithCallback(func(p interface{}) {
+//	    defer logger.RecoverWithCallback(func(p interface{}) {
 //	        metrics.IncrementPanicCounter()
 //	        alerts.SendPanicAlert(p)
 //	    }, "request_id", reqID)
@@ -1678,7 +1606,7 @@ func (l Logger) RecoverPanic(fields ...interface{}) {
 //	}
 //
 //	func mustNotPanic(logger logze.Logger) {
-//	    defer logger.RecoverPanicWithCallback(func(p interface{}) {
+//	    defer logger.RecoverWithCallback(func(p interface{}) {
 //	        // Re-throw after logging
 //	        panic(p)
 //	    }, "operation", "must-not-panic")
@@ -1688,14 +1616,14 @@ func (l Logger) RecoverPanic(fields ...interface{}) {
 //
 // Example output:
 //
-//	{"level":"error","message":"Panic recovered","panic":"runtime error: nil pointer dereference","stack":"...","request_id":"abc123"}
-func (l Logger) RecoverPanicWithCallback(callback func(interface{}), fields ...interface{}) {
+//	{"level":"error","message":"... stack trace ...","error":"runtime error: nil pointer dereference","request_id":"abc123"}
+func (l Logger) RecoverWithCallback(callback func(interface{}), fields ...interface{}) {
 	if r := recover(); r != nil {
 		stack := debug.Stack()
-		l.Error("Panic recovered",
-			append(fields,
-				"panic", r,
-				"stack", string(stack))...)
+		f := make([]interface{}, 0, len(fields)+2)
+		f = append(f, "error", r)
+		f = append(f, fields...)
+		l.Error(string(stack), f...)
 		if callback != nil {
 			callback(r)
 		}

@@ -2,6 +2,7 @@ package logze_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	stdlog "log"
@@ -890,5 +891,433 @@ func TestGlobalFunctionsCombination(t *testing.T) {
 	}
 	if !strings.Contains(output, "code\":404") {
 		t.Error("expected code field")
+	}
+}
+
+// Test global HTTP methods
+
+func TestGlobalHTTP(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelDebug)
+
+	duration := 42 * time.Millisecond
+	logze.HTTP("GET", "/api/users", 200, duration, "user_id", 123)
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"debug") {
+		t.Error("expected debug level")
+	}
+	if !strings.Contains(output, "HTTP request") {
+		t.Error("expected HTTP request message")
+	}
+	if !strings.Contains(output, "method\":\"GET") {
+		t.Error("expected method field")
+	}
+	if !strings.Contains(output, "path\":\"/api/users") {
+		t.Error("expected path field")
+	}
+	if !strings.Contains(output, "status\":200") {
+		t.Error("expected status field")
+	}
+	if !strings.Contains(output, "duration_ms\":42") {
+		t.Error("expected duration_ms field")
+	}
+	if !strings.Contains(output, "user_id\":123") {
+		t.Error("expected user_id field")
+	}
+}
+
+func TestGlobalHTTPError(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelError)
+
+	err := errors.New("database connection failed")
+	logze.HTTPError("POST", "/api/orders", 500, err, "order_id", "abc123")
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"error") {
+		t.Error("expected error level")
+	}
+	if !strings.Contains(output, "HTTP request failed") {
+		t.Error("expected HTTP request failed message")
+	}
+	if !strings.Contains(output, "method\":\"POST") {
+		t.Error("expected method field")
+	}
+	if !strings.Contains(output, "path\":\"/api/orders") {
+		t.Error("expected path field")
+	}
+	if !strings.Contains(output, "status\":500") {
+		t.Error("expected status field")
+	}
+	if !strings.Contains(output, "order_id\":\"abc123") {
+		t.Error("expected order_id field")
+	}
+	if !strings.Contains(output, "database connection failed") {
+		t.Error("expected error message")
+	}
+}
+
+func TestGlobalHTTPAuto(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelDebug)
+
+	duration := 100 * time.Millisecond
+
+	// Test success case (should log at debug level)
+	b.Reset()
+	logze.HTTPAuto("GET", "/api/products", 200, duration, nil, "product_id", "prod123")
+	output := b.String()
+	if !strings.Contains(output, "level\":\"debug") {
+		t.Error("expected debug level for 200 status")
+	}
+	if !strings.Contains(output, "HTTP request") {
+		t.Error("expected HTTP request message")
+	}
+
+	// Test client error case (should log at warn level)
+	b.Reset()
+	logze.HTTPAuto("GET", "/api/products", 404, duration, nil, "product_id", "prod123")
+	output = b.String()
+	if !strings.Contains(output, "level\":\"warn") {
+		t.Error("expected warn level for 404 status")
+	}
+	if !strings.Contains(output, "HTTP client error") {
+		t.Error("expected HTTP client error message")
+	}
+
+	// Test server error case (should log at error level)
+	b.Reset()
+	err := errors.New("internal server error")
+	logze.HTTPAuto("GET", "/api/products", 500, duration, err, "product_id", "prod123")
+	output = b.String()
+	if !strings.Contains(output, "level\":\"error") {
+		t.Error("expected error level for 500 status with error")
+	}
+	if !strings.Contains(output, "HTTP request failed") {
+		t.Error("expected HTTP request failed message")
+	}
+}
+
+// Test global Recover methods
+
+func TestGlobalRecover(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelError)
+
+	// Recover catches and logs the panic, preventing it from propagating
+	func() {
+		defer logze.Recover("request_id", "test123")
+		panic("test panic message")
+	}()
+
+	// Panic should be recovered, so execution continues normally
+	output := b.String()
+	if !strings.Contains(output, "level\":\"error") {
+		t.Errorf("expected error level, got output: %s", output)
+	}
+	// The panic value is logged in the "error" field
+	if !strings.Contains(output, "error\":\"test panic message") {
+		t.Errorf("expected panic message in error field, got output: %s", output)
+	}
+	if !strings.Contains(output, "request_id\":\"test123") {
+		t.Errorf("expected request_id field, got output: %s", output)
+	}
+	// Stack trace should be in the output (logged as the message)
+	if !strings.Contains(output, "goroutine") {
+		t.Logf("Stack trace might not be visible, but output: %s", output)
+	}
+}
+
+func TestGlobalRecoverPanic(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelError)
+
+	// RecoverPanic catches and logs the panic, preventing it from propagating
+	func() {
+		defer logze.Recover("component", "test", "operation", "test_op")
+
+		panic("panic with fields")
+	}()
+
+	// Panic should be recovered, so execution continues normally
+	output := b.String()
+	if !strings.Contains(output, "level\":\"error") {
+		t.Error("expected error level")
+	}
+	if !strings.Contains(output, "panic with fields") {
+		t.Error("expected panic message")
+	}
+	if !strings.Contains(output, "component\":\"test") {
+		t.Error("expected component field")
+	}
+	if !strings.Contains(output, "operation\":\"test_op") {
+		t.Error("expected operation field")
+	}
+}
+
+func TestGlobalRecoverPanicWithCallback(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelError)
+
+	callbackCalled := false
+	panicValue := ""
+
+	// RecoverPanicWithCallback catches and logs the panic, then calls the callback
+	func() {
+		defer logze.RecoverWithCallback(func(p interface{}) {
+			callbackCalled = true
+			panicValue = fmt.Sprint(p)
+		}, "request_id", "callback_test")
+
+		panic("callback test panic")
+	}()
+
+	// Panic should be recovered, so execution continues normally
+	if !callbackCalled {
+		t.Error("expected callback to be called")
+	}
+	if panicValue != "callback test panic" {
+		t.Errorf("expected panic value 'callback test panic', got '%s'", panicValue)
+	}
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"error") {
+		t.Error("expected error level")
+	}
+	if !strings.Contains(output, "callback test panic") {
+		t.Error("expected panic message")
+	}
+	if !strings.Contains(output, "request_id\":\"callback_test") {
+		t.Error("expected request_id field")
+	}
+}
+
+// Test global context-based methods
+
+func TestGlobalInfoCtx(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelInfo)
+
+	ctx := context.Background()
+	logze.InfoCtx(ctx, "info with context", "user_id", 456)
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"info") {
+		t.Error("expected info level")
+	}
+	if !strings.Contains(output, "info with context") {
+		t.Error("expected info message")
+	}
+	if !strings.Contains(output, "user_id\":456") {
+		t.Error("expected user_id field")
+	}
+}
+
+func TestGlobalInfoCtxCancelled(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelInfo)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel the context
+
+	logze.InfoCtx(ctx, "should not appear", "user_id", 456)
+
+	output := b.String()
+	if strings.Contains(output, "should not appear") {
+		t.Error("expected no log when context is cancelled")
+	}
+}
+
+func TestGlobalDebugCtx(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelDebug)
+
+	ctx := context.Background()
+	logze.DebugCtx(ctx, "debug with context", "component", "test")
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"debug") {
+		t.Error("expected debug level")
+	}
+	if !strings.Contains(output, "debug with context") {
+		t.Error("expected debug message")
+	}
+	if !strings.Contains(output, "component\":\"test") {
+		t.Error("expected component field")
+	}
+}
+
+func TestGlobalDebugCtxCancelled(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelDebug)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	logze.DebugCtx(ctx, "should not appear")
+
+	output := b.String()
+	if strings.Contains(output, "should not appear") {
+		t.Error("expected no log when context is cancelled")
+	}
+}
+
+func TestGlobalTraceCtx(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelTrace)
+
+	ctx := context.Background()
+	logze.TraceCtx(ctx, "trace with context", "operation", "startup")
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"trace") {
+		t.Error("expected trace level")
+	}
+	if !strings.Contains(output, "trace with context") {
+		t.Error("expected trace message")
+	}
+	if !strings.Contains(output, "operation\":\"startup") {
+		t.Error("expected operation field")
+	}
+}
+
+func TestGlobalTraceCtxCancelled(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelTrace)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	logze.TraceCtx(ctx, "should not appear")
+
+	output := b.String()
+	if strings.Contains(output, "should not appear") {
+		t.Error("expected no log when context is cancelled")
+	}
+}
+
+func TestGlobalWarnCtx(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelWarn)
+
+	ctx := context.Background()
+	logze.WarnCtx(ctx, "warn with context", "code", 404)
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"warn") {
+		t.Error("expected warn level")
+	}
+	if !strings.Contains(output, "warn with context") {
+		t.Error("expected warn message")
+	}
+	if !strings.Contains(output, "code\":404") {
+		t.Error("expected code field")
+	}
+}
+
+func TestGlobalWarnCtxCancelled(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelWarn)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	logze.WarnCtx(ctx, "should not appear")
+
+	output := b.String()
+	if strings.Contains(output, "should not appear") {
+		t.Error("expected no log when context is cancelled")
+	}
+}
+
+func TestGlobalErrorCtx(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelError)
+
+	ctx := context.Background()
+	logze.ErrorCtx(ctx, "error with context", "module", "payment")
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"error") {
+		t.Error("expected error level")
+	}
+	if !strings.Contains(output, "error with context") {
+		t.Error("expected error message")
+	}
+	if !strings.Contains(output, "module\":\"payment") {
+		t.Error("expected module field")
+	}
+}
+
+func TestGlobalErrorCtxCancelled(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelError)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	logze.ErrorCtx(ctx, "should not appear")
+
+	output := b.String()
+	if strings.Contains(output, "should not appear") {
+		t.Error("expected no log when context is cancelled")
+	}
+}
+
+func TestGlobalErrCtx(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelError)
+
+	ctx := context.Background()
+	err := errors.New("database connection failed")
+	logze.ErrCtx(ctx, err, "failed to fetch data", "retry_count", 3)
+
+	output := b.String()
+	if !strings.Contains(output, "level\":\"error") {
+		t.Error("expected error level")
+	}
+	if !strings.Contains(output, "failed to fetch data") {
+		t.Error("expected error message")
+	}
+	if !strings.Contains(output, "database connection failed") {
+		t.Error("expected error value")
+	}
+	if !strings.Contains(output, "retry_count\":3") {
+		t.Error("expected retry_count field")
+	}
+}
+
+func TestGlobalErrCtxCancelled(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelError)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := errors.New("test error")
+	logze.ErrCtx(ctx, err, "should not appear")
+
+	output := b.String()
+	if strings.Contains(output, "should not appear") {
+		t.Error("expected no log when context is cancelled")
+	}
+}
+
+func TestGlobalCtxWithTimeout(t *testing.T) {
+	var b bytes.Buffer
+	setupGlobalLogger(&b, logze.LevelInfo)
+
+	// Test with timeout context
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
+	time.Sleep(10 * time.Millisecond) // Wait for timeout
+
+	logze.InfoCtx(ctx, "should not appear after timeout")
+
+	output := b.String()
+	if strings.Contains(output, "should not appear after timeout") {
+		t.Error("expected no log when context is timed out")
 	}
 }
