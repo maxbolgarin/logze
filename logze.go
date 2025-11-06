@@ -1701,3 +1701,113 @@ func (l Logger) RecoverPanicWithCallback(callback func(interface{}), fields ...i
 		}
 	}
 }
+
+// InfoCtx logs a message at info level, checking context cancellation first.
+//
+// If the context is cancelled (Done channel is closed), this method returns
+// immediately without logging. This prevents unnecessary logging operations
+// when the request/operation has been cancelled.
+//
+// Parameters:
+//   - ctx: Context to check for cancellation
+//   - msg: Log message
+//   - fields: Optional key-value pairs
+//
+// Example usage:
+//
+//	func handleRequest(ctx context.Context, logger logze.Logger) {
+//	    logger.InfoCtx(ctx, "Processing request", "user_id", 123)
+//	    // If request is cancelled, log won't be written
+//	}
+//
+//	func processWithTimeout(ctx context.Context, logger logze.Logger) {
+//	    ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+//	    defer cancel()
+//
+//	    time.Sleep(10 * time.Second) // Simulated long operation
+//	    // This won't log because context timed out
+//	    logger.InfoCtx(ctx, "Operation completed")
+//	}
+func (l Logger) InfoCtx(ctx context.Context, msg string, fields ...interface{}) {
+	select {
+	case <-ctx.Done():
+		return // Context cancelled, skip logging
+	default:
+		l.Info(msg, fields...)
+	}
+}
+
+// DebugCtx logs a message at debug level, checking context cancellation first.
+// See InfoCtx for details about context checking behavior.
+func (l Logger) DebugCtx(ctx context.Context, msg string, fields ...interface{}) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		l.Debug(msg, fields...)
+	}
+}
+
+// TraceCtx logs a message at trace level, checking context cancellation first.
+// See InfoCtx for details about context checking behavior.
+func (l Logger) TraceCtx(ctx context.Context, msg string, fields ...interface{}) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		l.Trace(msg, fields...)
+	}
+}
+
+// WarnCtx logs a message at warn level, checking context cancellation first.
+// See InfoCtx for details about context checking behavior.
+func (l Logger) WarnCtx(ctx context.Context, msg string, fields ...interface{}) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		l.Warn(msg, fields...)
+	}
+}
+
+// ErrorCtx logs a message at error level, checking context cancellation first.
+// See InfoCtx for details about context checking behavior.
+func (l Logger) ErrorCtx(ctx context.Context, msg string, fields ...interface{}) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		l.Error(msg, fields...)
+	}
+}
+
+// ErrCtx logs an error with message at error level, checking context cancellation first.
+//
+// This method combines error logging with context cancellation checking.
+// Unlike ErrorCtx which logs a message at error level, ErrCtx specifically
+// logs an error object along with a message.
+//
+// Parameters:
+//   - ctx: Context to check for cancellation
+//   - err: Error to log
+//   - msg: Log message
+//   - fields: Optional key-value pairs
+//
+// Example usage:
+//
+//	func processData(ctx context.Context, logger logze.Logger) error {
+//	    result, err := fetchData()
+//	    if err != nil {
+//	        logger.ErrCtx(ctx, err, "Failed to fetch data", "retry_count", 3)
+//	        return err
+//	    }
+//	    return nil
+//	}
+func (l Logger) ErrCtx(ctx context.Context, err error, msg string, fields ...interface{}) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		l.Err(err, msg, fields...)
+	}
+}
