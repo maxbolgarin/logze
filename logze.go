@@ -1472,3 +1472,101 @@ func (l Logger) HTTPAuto(method, path string, status int, duration time.Duration
 		l.HTTP(method, path, status, duration, fields...)
 	}
 }
+
+// RecoverPanic recovers from panics and logs them at error level with stack trace.
+// This method should be called with defer to catch and log panics.
+//
+// If a panic occurs, it:
+//   - Recovers from the panic
+//   - Logs the panic value at error level
+//   - Includes the full stack trace in the log
+//   - Includes any additional fields provided
+//
+// The panic is caught and logged, but not re-thrown. If you need to re-throw
+// the panic after logging, use RecoverPanicWithCallback and call panic() in the callback.
+//
+// Parameters:
+//   - fields: Optional key-value pairs to include in the panic log
+//
+// Example usage:
+//
+//	func handleRequest(logger logze.Logger, reqID string) {
+//	    defer logger.RecoverPanic("request_id", reqID)
+//
+//	    // ... code that might panic
+//	    processData()
+//	}
+//
+//	func criticalOperation(logger logze.Logger) {
+//	    defer logger.RecoverPanic("operation", "critical", "module", "payment")
+//
+//	    // ... code that might panic
+//	}
+//
+// Example output:
+//
+//	{"level":"error","message":"Panic recovered","panic":"runtime error: index out of range","stack":"...","request_id":"abc123"}
+func (l Logger) RecoverPanic(fields ...interface{}) {
+	if r := recover(); r != nil {
+		stack := debug.Stack()
+		l.Error("Panic recovered",
+			append(fields,
+				"panic", r,
+				"stack", string(stack))...)
+	}
+}
+
+// RecoverPanicWithCallback recovers from panics, logs them, and executes a callback function.
+// This method should be called with defer to catch and log panics with custom handling.
+//
+// If a panic occurs, it:
+//   - Recovers from the panic
+//   - Logs the panic value at error level with stack trace
+//   - Executes the provided callback function with the panic value
+//   - Includes any additional fields provided
+//
+// The callback can be used for:
+//   - Incrementing panic metrics/counters
+//   - Sending alerts
+//   - Performing cleanup
+//   - Re-throwing the panic if needed
+//
+// Parameters:
+//   - callback: Function to call if a panic occurs (receives the panic value)
+//   - fields: Optional key-value pairs to include in the panic log
+//
+// Example usage:
+//
+//	func handleRequest(logger logze.Logger, metrics *Metrics) {
+//	    defer logger.RecoverPanicWithCallback(func(p interface{}) {
+//	        metrics.IncrementPanicCounter()
+//	        alerts.SendPanicAlert(p)
+//	    }, "request_id", reqID)
+//
+//	    // ... code that might panic
+//	}
+//
+//	func mustNotPanic(logger logze.Logger) {
+//	    defer logger.RecoverPanicWithCallback(func(p interface{}) {
+//	        // Re-throw after logging
+//	        panic(p)
+//	    }, "operation", "must-not-panic")
+//
+//	    // ... code that should not panic
+//	}
+//
+// Example output:
+//
+//	{"level":"error","message":"Panic recovered","panic":"runtime error: nil pointer dereference","stack":"...","request_id":"abc123"}
+func (l Logger) RecoverPanicWithCallback(callback func(interface{}), fields ...interface{}) {
+	if r := recover(); r != nil {
+		stack := debug.Stack()
+		l.Error("Panic recovered",
+			append(fields,
+				"panic", r,
+				"stack", string(stack))...)
+		if callback != nil {
+			callback(r)
+		}
+	}
+}

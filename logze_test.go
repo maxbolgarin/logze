@@ -1693,3 +1693,131 @@ func TestHTTPAuto(t *testing.T) {
 		})
 	}
 }
+
+func TestRecoverPanic(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	// Test function that panics
+	func() {
+		defer logger.RecoverPanic("request_id", "abc123", "operation", "test")
+		panic("something went wrong")
+	}()
+
+	output := b.String()
+	expectedFields := []string{
+		`"level":"error"`,
+		`"message":"Panic recovered"`,
+		`"panic":"something went wrong"`,
+		`"stack"`,
+		`"request_id":"abc123"`,
+		`"operation":"test"`,
+	}
+
+	for _, field := range expectedFields {
+		if !strings.Contains(output, field) {
+			t.Errorf("expected field '%s', got %s", field, output)
+		}
+	}
+}
+
+func TestRecoverPanicNoPanic(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	// Test function that doesn't panic
+	func() {
+		defer logger.RecoverPanic("request_id", "abc123")
+		// No panic
+	}()
+
+	output := b.String()
+	if output != "" {
+		t.Errorf("expected no output when no panic occurs, got %s", output)
+	}
+}
+
+func TestRecoverPanicWithCallback(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	callbackCalled := false
+	var panicValue interface{}
+
+	// Test function that panics
+	func() {
+		defer logger.RecoverPanicWithCallback(func(p interface{}) {
+			callbackCalled = true
+			panicValue = p
+		}, "request_id", "abc123")
+		panic("test panic")
+	}()
+
+	if !callbackCalled {
+		t.Error("expected callback to be called")
+	}
+	if panicValue != "test panic" {
+		t.Errorf("expected panic value 'test panic', got %v", panicValue)
+	}
+
+	output := b.String()
+	expectedFields := []string{
+		`"level":"error"`,
+		`"message":"Panic recovered"`,
+		`"panic":"test panic"`,
+		`"stack"`,
+		`"request_id":"abc123"`,
+	}
+
+	for _, field := range expectedFields {
+		if !strings.Contains(output, field) {
+			t.Errorf("expected field '%s', got %s", field, output)
+		}
+	}
+}
+
+func TestRecoverPanicWithCallbackNoPanic(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	callbackCalled := false
+
+	// Test function that doesn't panic
+	func() {
+		defer logger.RecoverPanicWithCallback(func(p interface{}) {
+			callbackCalled = true
+		}, "request_id", "abc123")
+		// No panic
+	}()
+
+	if callbackCalled {
+		t.Error("expected callback not to be called when no panic occurs")
+	}
+
+	output := b.String()
+	if output != "" {
+		t.Errorf("expected no output when no panic occurs, got %s", output)
+	}
+}
+
+func TestRecoverPanicWithNilCallback(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	// Test function that panics with nil callback
+	func() {
+		defer logger.RecoverPanicWithCallback(nil, "request_id", "abc123")
+		panic("test panic")
+	}()
+
+	// Should not panic even with nil callback
+	output := b.String()
+	if !strings.Contains(output, `"panic":"test panic"`) {
+		t.Errorf("expected panic to be logged, got %s", output)
+	}
+}
