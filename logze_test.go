@@ -2149,3 +2149,141 @@ func TestRotatingFileWithConsole(t *testing.T) {
 		t.Errorf("expected 'test message' in file output, got %s", fileOutput)
 	}
 }
+
+func TestGetLevel(t *testing.T) {
+	tests := []struct {
+		name     string
+		level    string
+		expected string
+	}{
+		{"debug level", "debug", "debug"},
+		{"info level", "info", "info"},
+		{"warn level", "warn", "warn"},
+		{"error level", "error", "error"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := logze.C().WithLevel(tt.level).WithNoDiode()
+			logger := logze.New(cfg)
+
+			level := logger.GetLevel()
+			if level != tt.expected {
+				t.Errorf("expected level '%s', got '%s'", tt.expected, level)
+			}
+		})
+	}
+}
+
+func TestIsEnabled(t *testing.T) {
+	// Logger with info level
+	cfg := logze.C().WithLevel("info").WithNoDiode()
+	logger := logze.New(cfg)
+
+	// Should be enabled
+	if !logger.IsEnabled("info") {
+		t.Error("expected info level to be enabled")
+	}
+	if !logger.IsEnabled("warn") {
+		t.Error("expected warn level to be enabled")
+	}
+	if !logger.IsEnabled("error") {
+		t.Error("expected error level to be enabled")
+	}
+
+	// Should be disabled
+	if logger.IsEnabled("debug") {
+		t.Error("expected debug level to be disabled")
+	}
+	if logger.IsEnabled("trace") {
+		t.Error("expected trace level to be disabled")
+	}
+
+	// Invalid level
+	if logger.IsEnabled("invalid") {
+		t.Error("expected invalid level to return false")
+	}
+}
+
+func TestHasErrorCounter(t *testing.T) {
+	// Logger without error counter
+	cfg := logze.C().WithNoDiode()
+	logger := logze.New(cfg)
+	if logger.HasErrorCounter() {
+		t.Error("expected HasErrorCounter to return false when no counter is configured")
+	}
+
+	// Logger with error counter
+	cfg = logze.C().WithSimpleErrorCounter().WithNoDiode()
+	logger = logze.New(cfg)
+	if !logger.HasErrorCounter() {
+		t.Error("expected HasErrorCounter to return true when counter is configured")
+	}
+}
+
+func TestHasDiode(t *testing.T) {
+	// Logger with diode (default)
+	cfg := logze.C()
+	logger := logze.New(cfg)
+	if !logger.HasDiode() {
+		t.Error("expected HasDiode to return true when diode is enabled by default")
+	}
+
+	// Logger without diode
+	cfg = logze.C().WithNoDiode()
+	logger = logze.New(cfg)
+	if logger.HasDiode() {
+		t.Error("expected HasDiode to return false when WithNoDiode is used")
+	}
+}
+
+func TestInspectionMethodsTogether(t *testing.T) {
+	// Create logger with known configuration
+	cfg := logze.C().
+		WithLevel("debug").
+		WithSimpleErrorCounter().
+		WithNoDiode()
+	logger := logze.New(cfg)
+
+	// Verify all inspection methods
+	if logger.GetLevel() != "debug" {
+		t.Errorf("expected level 'debug', got '%s'", logger.GetLevel())
+	}
+
+	if !logger.IsEnabled("debug") {
+		t.Error("expected debug to be enabled")
+	}
+
+	if !logger.HasErrorCounter() {
+		t.Error("expected error counter to be present")
+	}
+
+	if logger.HasDiode() {
+		t.Error("expected no diode")
+	}
+
+	// Verify error counter works
+	var b bytes.Buffer
+	testCfg := logze.C().
+		WithLevel("debug").
+		WithSimpleErrorCounter().
+		WithNoDiode().
+		WithWriter(&b)
+	testLogger := logze.New(testCfg)
+
+	testLogger.Err(errors.New("test error"), "test message", "key", "value")
+
+	counter := testLogger.GetErrorCounter()
+	if counter == nil {
+		t.Fatal("expected non-nil error counter")
+	}
+
+	if simple, ok := counter.(*logze.SimpleErrorCounter); ok {
+		count := atomic.LoadUint64(&simple.Count)
+		if count != 1 {
+			t.Errorf("expected error count 1, got %d", count)
+		}
+	} else {
+		t.Error("expected SimpleErrorCounter type")
+	}
+}

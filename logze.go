@@ -1266,6 +1266,115 @@ func (l Logger) GetErrorCounter() ErrorCounter {
 	return l.errCounter
 }
 
+// GetLevel returns the current log level as a string.
+//
+// This method inspects the underlying zerolog logger and returns the configured
+// log level. Useful for runtime debugging and configuration validation.
+//
+// Returns one of: "trace", "debug", "info", "warn", "error", "fatal", "panic", "disabled"
+//
+// Example usage:
+//
+//	logger := logze.New(logze.C().WithLevel("debug"))
+//	level := logger.GetLevel()
+//	fmt.Printf("Current log level: %s\n", level) // Output: "Current log level: debug"
+//
+//	if logger.GetLevel() == "debug" {
+//	    fmt.Println("Debug logging is enabled")
+//	}
+func (l Logger) GetLevel() string {
+	level := l.l.GetLevel()
+	return level.String()
+}
+
+// IsEnabled checks if a specific log level is enabled.
+//
+// This method is useful for conditionally performing expensive operations only
+// when the log level would actually be output.
+//
+// Parameters:
+//   - level: Log level to check ("trace", "debug", "info", "warn", "error", "fatal")
+//
+// Returns true if the specified level would be logged, false otherwise.
+// Returns false for invalid level strings.
+//
+// Example usage:
+//
+//	logger := logze.New(logze.C().WithLevel("info"))
+//
+//	if logger.IsEnabled("debug") {
+//	    // This won't execute since debug < info
+//	    result := expensiveDebugOperation()
+//	    logger.Debug("Operation result", "result", result)
+//	}
+//
+//	if logger.IsEnabled("info") {
+//	    // This will execute
+//	    logger.Info("Processing started")
+//	}
+func (l Logger) IsEnabled(level string) bool {
+	lvl, err := zerolog.ParseLevel(level)
+	if err != nil {
+		return false
+	}
+	return l.l.GetLevel() <= lvl
+}
+
+// HasErrorCounter returns true if the logger has an error counter configured.
+//
+// This method checks whether error counting is enabled for this logger instance.
+// Useful for conditional logic that depends on error tracking being available.
+//
+// Example usage:
+//
+//	logger := logze.New(logze.C().WithSimpleErrorCounter())
+//
+//	if logger.HasErrorCounter() {
+//	    // Error counter is available
+//	    counter := logger.GetErrorCounter()
+//	    if simple, ok := counter.(*logze.SimpleErrorCounter); ok {
+//	        errorCount := simple.Count.Load()
+//	        if errorCount > 100 {
+//	            fmt.Println("High error rate detected!")
+//	        }
+//	    }
+//	} else {
+//	    fmt.Println("Error counting not enabled")
+//	}
+func (l Logger) HasErrorCounter() bool {
+	return l.errCounter != nil
+}
+
+// HasDiode returns true if the logger has a diode writer configured.
+//
+// This method checks whether non-blocking asynchronous logging is enabled via
+// a diode writer. Useful for understanding the logger's performance characteristics.
+//
+// When diode is enabled:
+//   - Logging calls don't block on I/O
+//   - Messages are buffered and written asynchronously
+//   - High throughput scenarios benefit from reduced latency
+//   - Messages may be dropped if buffer fills up
+//
+// When diode is disabled (WithNoDiode()):
+//   - Logging calls block until written
+//   - Guaranteed message delivery
+//   - Lower throughput, higher latency
+//
+// Example usage:
+//
+//	logger := logze.New(logze.C().WithConsoleJSON()) // Diode enabled by default
+//
+//	if logger.HasDiode() {
+//	    fmt.Println("Non-blocking async logging enabled")
+//	    // Remember to call logger.Close() before exit to flush pending messages
+//	} else {
+//	    fmt.Println("Blocking synchronous logging")
+//	}
+func (l Logger) HasDiode() bool {
+	return l.diodeWriter != nil
+}
+
 func (l Logger) log(ev *zerolog.Event, msg string, fields []interface{}) {
 	// Fast path: check exact matches first (O(1))
 	if len(l.ignoreMap) > 0 {
