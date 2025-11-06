@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // DefaultDiodeSize is a default size of a diode writer. Logs will be lost if there will be more logs than that value
@@ -371,6 +372,55 @@ func (c Config) WithFile(filename string, perm ...os.FileMode) (Config, io.Close
 	}
 	c.Writers = append(c.Writers, f)
 	return c, f, nil
+}
+
+// WithRotatingFile configures logging output to a file with automatic rotation.
+//
+// This method uses the lumberjack library to provide log rotation based on file size,
+// age, and number of backups. Rotated files are automatically compressed.
+//
+// Parameters:
+//   - filename: Path to the log file
+//   - maxSizeMB: Maximum size in megabytes before rotating (default: 100MB)
+//   - maxAgeDays: Maximum age in days to retain old log files (0 = keep all)
+//   - maxBackups: Maximum number of old log files to retain (0 = keep all)
+//
+// Features:
+//   - Automatic rotation when file reaches maxSize
+//   - Old files are compressed (.gz)
+//   - Old files follow naming: filename.YYYY-MM-DD.HH-MM-SS.gz
+//   - Thread-safe for concurrent writes
+//
+// Example usage:
+//
+//	// Rotate at 100MB, keep 30 days, max 5 backups
+//	logger := logze.New(
+//	    logze.C().
+//	        WithRotatingFile("app.log", 100, 30, 5).
+//	        WithLevel("info"),
+//	    "service", "api",
+//	)
+//
+//	// Rotate at 50MB, keep all files (no age limit), max 10 backups
+//	logger := logze.New(
+//	    logze.C().
+//	        WithRotatingFile("app.log", 50, 0, 10).
+//	        WithConsoleJSON(), // Can combine with console output
+//	    "service", "api",
+//	)
+//
+// Note: Requires the gopkg.in/natefinch/lumberjack.v2 package.
+// The rotating writer implements io.WriteCloser and should be closed when done.
+func (c Config) WithRotatingFile(filename string, maxSizeMB, maxAgeDays, maxBackups int) (Config, io.WriteCloser) {
+	logger := &lumberjack.Logger{
+		Filename:   filename,
+		MaxSize:    maxSizeMB,
+		MaxAge:     maxAgeDays,
+		MaxBackups: maxBackups,
+		Compress:   true,
+	}
+	c.Writers = append(c.Writers, logger)
+	return c, logger
 }
 
 // WithConsole configures colored console output for human-readable logging.

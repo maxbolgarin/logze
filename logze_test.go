@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -2063,5 +2064,88 @@ func TestConsoleNoColorTimeFormat(t *testing.T) {
 	expectedMonth := now.Format("Jan")
 	if !strings.Contains(output, expectedMonth) {
 		t.Errorf("expected syslog format with month name, got %s", output)
+	}
+}
+
+func TestRotatingFile(t *testing.T) {
+	// Create a temp directory for test logs
+	tmpDir := t.TempDir()
+	logFile := tmpDir + "/test.log"
+
+	// Create config with rotating file
+	cfg, closer := logze.C().WithRotatingFile(logFile, 10, 7, 3) // 10MB, 7 days, 3 backups
+	defer closer.Close()
+
+	cfg = cfg.WithLevel(logze.LevelDebug).WithNoDiode()
+
+	logger := logze.New(cfg)
+
+	// Write some log messages
+	for i := 0; i < 10; i++ {
+		logger.Info(fmt.Sprintf("test message %d", i), "iteration", i)
+	}
+
+	// Close to flush
+	closer.Close()
+
+	// Verify file was created
+	if _, err := os.Stat(logFile); os.IsNotExist(err) {
+		t.Errorf("expected log file to be created at %s", logFile)
+	}
+
+	// Read the file and verify content
+	content, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+
+	output := string(content)
+	if !strings.Contains(output, "test message 0") {
+		t.Errorf("expected to find 'test message 0' in log file, got %s", output)
+	}
+	if !strings.Contains(output, "test message 9") {
+		t.Errorf("expected to find 'test message 9' in log file, got %s", output)
+	}
+}
+
+func TestRotatingFileWithConsole(t *testing.T) {
+	// Create a temp directory for test logs
+	tmpDir := t.TempDir()
+	logFile := tmpDir + "/test-combined.log"
+
+	var b bytes.Buffer
+
+	// Create config with both rotating file and console output
+	cfg, closer := logze.C().WithRotatingFile(logFile, 10, 7, 3)
+	defer closer.Close()
+
+	cfg = cfg.WithLevel(logze.LevelDebug).WithNoDiode()
+
+	// Add console writer to buffer
+	cfg = cfg.WithWriter(&b)
+
+	logger := logze.New(cfg)
+
+	// Write log message
+	logger.Info("test message", "key", "value")
+
+	// Close to flush
+	closer.Close()
+
+	// Verify both outputs have the message
+	// Check buffer (console output)
+	bufferOutput := b.String()
+	if !strings.Contains(bufferOutput, "test message") {
+		t.Errorf("expected 'test message' in buffer output, got %s", bufferOutput)
+	}
+
+	// Check file output
+	content, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+	fileOutput := string(content)
+	if !strings.Contains(fileOutput, "test message") {
+		t.Errorf("expected 'test message' in file output, got %s", fileOutput)
 	}
 }
