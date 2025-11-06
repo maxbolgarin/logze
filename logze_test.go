@@ -1574,3 +1574,122 @@ func TestLoggerErroWithLoggerFields(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPLogging(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	duration := 42 * time.Millisecond
+	logger.HTTP("GET", "/api/users", 200, duration, "user_id", 123)
+
+	output := b.String()
+	expectedFields := []string{
+		`"level":"debug"`,
+		`"message":"HTTP request"`,
+		`"method":"GET"`,
+		`"path":"/api/users"`,
+		`"status":200`,
+		`"duration_ms":42`,
+		`"user_id":123`,
+	}
+
+	for _, field := range expectedFields {
+		if !strings.Contains(output, field) {
+			t.Errorf("expected field '%s', got %s", field, output)
+		}
+	}
+}
+
+func TestHTTPError(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	err := errors.New("database connection failed")
+	logger.HTTPError("POST", "/api/orders", 500, err, "order_id", "abc123")
+
+	output := b.String()
+	expectedFields := []string{
+		`"level":"error"`,
+		`"error":"database connection failed"`,
+		`"message":"HTTP request failed"`,
+		`"method":"POST"`,
+		`"path":"/api/orders"`,
+		`"status":500`,
+		`"order_id":"abc123"`,
+	}
+
+	for _, field := range expectedFields {
+		if !strings.Contains(output, field) {
+			t.Errorf("expected field '%s', got %s", field, output)
+		}
+	}
+}
+
+func TestHTTPAuto(t *testing.T) {
+	tests := []struct {
+		name           string
+		status         int
+		err            error
+		expectedLevel  string
+		expectedMsg    string
+	}{
+		{
+			name:          "success status",
+			status:        200,
+			err:           nil,
+			expectedLevel: "debug",
+			expectedMsg:   "HTTP request",
+		},
+		{
+			name:          "client error",
+			status:        404,
+			err:           nil,
+			expectedLevel: "warn",
+			expectedMsg:   "HTTP client error",
+		},
+		{
+			name:          "server error",
+			status:        500,
+			err:           nil,
+			expectedLevel: "error",
+			expectedMsg:   "HTTP request failed",
+		},
+		{
+			name:          "error with success status",
+			status:        200,
+			err:           errors.New("unexpected error"),
+			expectedLevel: "error",
+			expectedMsg:   "HTTP request failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var b bytes.Buffer
+			cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+			logger := logze.New(cfg)
+
+			duration := 50 * time.Millisecond
+			logger.HTTPAuto("GET", "/api/test", tt.status, duration, tt.err)
+
+			output := b.String()
+			if !strings.Contains(output, fmt.Sprintf(`"level":"%s"`, tt.expectedLevel)) {
+				t.Errorf("expected level '%s', got %s", tt.expectedLevel, output)
+			}
+			if !strings.Contains(output, tt.expectedMsg) {
+				t.Errorf("expected message '%s', got %s", tt.expectedMsg, output)
+			}
+			if !strings.Contains(output, `"method":"GET"`) {
+				t.Errorf("expected method field, got %s", output)
+			}
+			if !strings.Contains(output, `"path":"/api/test"`) {
+				t.Errorf("expected path field, got %s", output)
+			}
+			if !strings.Contains(output, fmt.Sprintf(`"status":%d`, tt.status)) {
+				t.Errorf("expected status %d, got %s", tt.status, output)
+			}
+		})
+	}
+}

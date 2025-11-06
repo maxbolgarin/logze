@@ -1373,3 +1373,102 @@ func (l Logger) incErrorCounter(err error) {
 		l.errCounter.Inc(err)
 	}
 }
+
+// HTTP logs an HTTP request at debug level with standardized fields.
+// This is a convenience method for consistent HTTP request logging.
+//
+// Parameters:
+//   - method: HTTP method (GET, POST, etc.)
+//   - path: Request path
+//   - status: HTTP status code
+//   - duration: Request processing duration
+//   - fields: Additional key-value pairs to include
+//
+// Example usage:
+//
+//	start := time.Now()
+//	// ... handle request
+//	logger.HTTP("GET", "/api/users", 200, time.Since(start), "user_id", userID)
+//
+// Example output:
+//
+//	{"level":"debug","message":"HTTP request","method":"GET","path":"/api/users","status":200,"duration_ms":42}
+func (l Logger) HTTP(method, path string, status int, duration time.Duration, fields ...interface{}) {
+	l.Debug("HTTP request",
+		append([]interface{}{
+			"method", method,
+			"path", path,
+			"status", status,
+			"duration_ms", duration.Milliseconds(),
+		}, fields...)...)
+}
+
+// HTTPError logs an HTTP request error at error level with standardized fields.
+// This is a convenience method for consistent HTTP error logging.
+//
+// Parameters:
+//   - method: HTTP method (GET, POST, etc.)
+//   - path: Request path
+//   - status: HTTP status code
+//   - err: The error that occurred
+//   - fields: Additional key-value pairs to include
+//
+// Example usage:
+//
+//	if err != nil {
+//	    logger.HTTPError("POST", "/api/orders", 500, err, "order_id", orderID)
+//	}
+//
+// Example output:
+//
+//	{"level":"error","error":"database connection failed","message":"HTTP request failed","method":"POST","path":"/api/orders","status":500,"order_id":"abc123"}
+func (l Logger) HTTPError(method, path string, status int, err error, fields ...interface{}) {
+	l.Err(err, "HTTP request failed",
+		append([]interface{}{
+			"method", method,
+			"path", path,
+			"status", status,
+		}, fields...)...)
+}
+
+// HTTPAuto automatically selects the appropriate log level based on HTTP status code and error.
+// This is a convenience method for automatic log level detection.
+//
+// Log levels:
+//   - Error level: If err is not nil OR status >= 500 (server errors)
+//   - Warn level: If status >= 400 (client errors)
+//   - Debug level: Otherwise (success)
+//
+// Parameters:
+//   - method: HTTP method (GET, POST, etc.)
+//   - path: Request path
+//   - status: HTTP status code
+//   - duration: Request processing duration
+//   - err: Optional error (can be nil)
+//   - fields: Additional key-value pairs to include
+//
+// Example usage:
+//
+//	start := time.Now()
+//	resp, err := client.Call()
+//	logger.HTTPAuto("GET", "/api/products", resp.StatusCode, time.Since(start), err, "product_id", prodID)
+//
+// This method will automatically choose:
+//   - Error log for 500+ status or non-nil error
+//   - Warn log for 400-499 status
+//   - Debug log for 200-399 status
+func (l Logger) HTTPAuto(method, path string, status int, duration time.Duration, err error, fields ...interface{}) {
+	if err != nil || status >= 500 {
+		l.HTTPError(method, path, status, err, fields...)
+	} else if status >= 400 {
+		l.Warn("HTTP client error",
+			append([]interface{}{
+				"method", method,
+				"path", path,
+				"status", status,
+				"duration_ms", duration.Milliseconds(),
+			}, fields...)...)
+	} else {
+		l.HTTP(method, path, status, duration, fields...)
+	}
+}
