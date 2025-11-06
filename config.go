@@ -3,6 +3,7 @@ package logze
 import (
 	"io"
 	"os"
+	"regexp"
 	"sync/atomic"
 	"time"
 
@@ -83,6 +84,11 @@ type Config struct {
 	// ToIgnore is a list of messages that will be ignored.
 	// Default value is nil.
 	ToIgnore []string
+
+	// ToIgnoreRegex is a list of regular expression patterns for messages that will be ignored.
+	// Messages matching any of these patterns will not be logged.
+	// Default value is nil.
+	ToIgnoreRegex []*regexp.Regexp
 
 	// ErrorCounter is a counter of logged errors. Use WithSimpleErrorCounter method to use a simple counter.
 	// Default value is nil.
@@ -408,6 +414,35 @@ func (c Config) WithConsoleJSON() Config {
 // WithToIgnore returns [Config] with a list of messages that will be ignored.
 func (c Config) WithToIgnore(toIgnore ...string) Config {
 	c.ToIgnore = toIgnore
+	return c
+}
+
+// WithToIgnoreRegex returns [Config] with a list of regular expression patterns for filtering messages.
+// Messages matching any of these patterns will not be logged. This provides more flexible filtering
+// than WithToIgnore, supporting pattern matching instead of exact/substring matches.
+//
+// The patterns are compiled into [*regexp.Regexp] objects. If a pattern fails to compile,
+// this method will panic - ensure your patterns are valid regular expressions.
+//
+// Parameters:
+//   - patterns: Regular expression patterns in string format
+//
+// Example usage:
+//
+//	config := logze.C().
+//		WithConsoleJSON().
+//		WithToIgnore("health", "ping").           // Exact/substring match
+//		WithToIgnoreRegex(`^GET /metrics.*`,      // Regex: starts with "GET /metrics"
+//		                  `(?i)debug`,            // Regex: case-insensitive "debug"
+//		                  `\[test-\d+\]`)         // Regex: [test-123] format
+//
+// Note: Regex matching is more powerful but slightly slower than exact string matching.
+// Use WithToIgnore for simple cases and WithToIgnoreRegex when pattern matching is needed.
+func (c Config) WithToIgnoreRegex(patterns ...string) Config {
+	c.ToIgnoreRegex = make([]*regexp.Regexp, len(patterns))
+	for i, pattern := range patterns {
+		c.ToIgnoreRegex[i] = regexp.MustCompile(pattern)
+	}
 	return c
 }
 

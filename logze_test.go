@@ -1821,3 +1821,113 @@ func TestRecoverPanicWithNilCallback(t *testing.T) {
 		t.Errorf("expected panic to be logged, got %s", output)
 	}
 }
+
+func TestToIgnoreRegex(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).
+		WithLevel(logze.LevelDebug).
+		WithNoDiode().
+		WithToIgnoreRegex(`^GET /metrics.*`, `(?i)health`, `\[test-\d+\]`)
+	logger := logze.New(cfg)
+
+	// Should be ignored - matches ^GET /metrics.*
+	logger.Info("GET /metrics/prometheus")
+	if b.String() != "" {
+		t.Errorf("expected no output for 'GET /metrics/prometheus', got %s", b.String())
+	}
+	b.Reset()
+
+	// Should be ignored - matches (?i)health (case insensitive)
+	logger.Info("Health check passed")
+	if b.String() != "" {
+		t.Errorf("expected no output for 'Health check passed', got %s", b.String())
+	}
+	b.Reset()
+
+	logger.Info("HEALTH status ok")
+	if b.String() != "" {
+		t.Errorf("expected no output for 'HEALTH status ok', got %s", b.String())
+	}
+	b.Reset()
+
+	// Should be ignored - matches \[test-\d+\]
+	logger.Info("Running [test-123] suite")
+	if b.String() != "" {
+		t.Errorf("expected no output for 'Running [test-123] suite', got %s", b.String())
+	}
+	b.Reset()
+
+	// Should NOT be ignored
+	logger.Info("POST /api/users")
+	if b.String() == "" {
+		t.Error("expected output for 'POST /api/users'")
+	}
+	b.Reset()
+
+	logger.Info("Database query")
+	if b.String() == "" {
+		t.Error("expected output for 'Database query'")
+	}
+}
+
+func TestToIgnoreRegexAndExact(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).
+		WithLevel(logze.LevelDebug).
+		WithNoDiode().
+		WithToIgnore("ping", "pong").
+		WithToIgnoreRegex(`^debug:.*`)
+	logger := logze.New(cfg)
+
+	// Should be ignored by exact match
+	logger.Info("ping")
+	if b.String() != "" {
+		t.Errorf("expected no output for 'ping', got %s", b.String())
+	}
+	b.Reset()
+
+	// Should be ignored by substring match
+	logger.Info("received ping from server")
+	if b.String() != "" {
+		t.Errorf("expected no output for 'received ping from server', got %s", b.String())
+	}
+	b.Reset()
+
+	// Should be ignored by regex match
+	logger.Info("debug: processing request")
+	if b.String() != "" {
+		t.Errorf("expected no output for 'debug: processing request', got %s", b.String())
+	}
+	b.Reset()
+
+	// Should NOT be ignored
+	logger.Info("info: request completed")
+	if b.String() == "" {
+		t.Error("expected output for 'info: request completed'")
+	}
+}
+
+func TestWithFieldsPreservesRegex(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).
+		WithLevel(logze.LevelDebug).
+		WithNoDiode().
+		WithToIgnoreRegex(`^ignore.*`)
+	logger := logze.New(cfg).WithFields("service", "test")
+
+	// Should be ignored after WithFields
+	logger.Info("ignore this message")
+	if b.String() != "" {
+		t.Errorf("expected no output for 'ignore this message', got %s", b.String())
+	}
+	b.Reset()
+
+	// Should NOT be ignored
+	logger.Info("process this message")
+	if !strings.Contains(b.String(), "process this message") {
+		t.Errorf("expected output for 'process this message', got %s", b.String())
+	}
+	if !strings.Contains(b.String(), `"service":"test"`) {
+		t.Errorf("expected service field in output, got %s", b.String())
+	}
+}
