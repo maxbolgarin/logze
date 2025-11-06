@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1929,5 +1930,138 @@ func TestWithFieldsPreservesRegex(t *testing.T) {
 	}
 	if !strings.Contains(b.String(), `"service":"test"`) {
 		t.Errorf("expected service field in output, got %s", b.String())
+	}
+}
+
+func TestConsoleTimeFormat(t *testing.T) {
+	var b bytes.Buffer
+	// Use C() to start with empty config, then add console writer with custom time format
+	cfg := logze.C().
+		WithConsoleTimeFormat(time.Kitchen). // Set format before WithConsole
+		WithConsole().
+		WithLevel(logze.LevelDebug).
+		WithNoDiode()
+
+	// Clear the default writers and add our buffer with console format
+	cfg.Writers = nil
+	cfg = cfg.WithWriter(&b)
+
+	// Re-add console writer to buffer (not stderr)
+	writer := zerolog.ConsoleWriter{
+		Out:        &b,
+		NoColor:    true,
+		TimeFormat: time.Kitchen,
+	}
+	cfg.Writers = []io.Writer{writer}
+
+	logger := logze.New(cfg)
+
+	// Get current time and log
+	now := time.Now()
+	logger.Info("test message")
+
+	output := b.String()
+
+	// Should contain the time in Kitchen format (e.g., "3:04PM")
+	// We check for AM or PM to verify the format is used
+	if !strings.Contains(output, "AM") && !strings.Contains(output, "PM") {
+		t.Errorf("expected Kitchen format time (with AM/PM), got %s", output)
+	}
+
+	// Should not contain the default format pattern
+	if strings.Contains(output, now.Format("2006-01-02")) {
+		t.Errorf("expected Kitchen format, but got default format in %s", output)
+	}
+}
+
+func TestConsoleTimeFormatCustom(t *testing.T) {
+	var b bytes.Buffer
+
+	// Create console writer with custom time format
+	writer := zerolog.ConsoleWriter{
+		Out:        &b,
+		NoColor:    true,
+		TimeFormat: "15:04:05",
+	}
+
+	cfg := logze.C().
+		WithLevel(logze.LevelDebug).
+		WithNoDiode()
+	cfg.Writers = []io.Writer{writer}
+
+	logger := logze.New(cfg)
+
+	now := time.Now()
+	logger.Info("test message")
+
+	output := b.String()
+
+	// Should contain time in HH:MM:SS format
+	expectedTime := now.Format("15:04")
+	if !strings.Contains(output, expectedTime) {
+		t.Errorf("expected time format '15:04:05', got %s", output)
+	}
+
+	// Should not contain date
+	if strings.Contains(output, now.Format("2006")) {
+		t.Errorf("expected time-only format, but got date in %s", output)
+	}
+}
+
+func TestConsoleTimeFormatDefault(t *testing.T) {
+	var b bytes.Buffer
+
+	// Create console writer with default time format
+	writer := zerolog.ConsoleWriter{
+		Out:        &b,
+		NoColor:    true,
+		TimeFormat: "2006-01-02 15:04:05", // Default format
+	}
+
+	cfg := logze.C().
+		WithLevel(logze.LevelDebug).
+		WithNoDiode()
+	cfg.Writers = []io.Writer{writer}
+
+	logger := logze.New(cfg)
+
+	now := time.Now()
+	logger.Info("test message")
+
+	output := b.String()
+
+	// Should contain the default format "2006-01-02 15:04:05"
+	expectedDate := now.Format("2006-01-02")
+	if !strings.Contains(output, expectedDate) {
+		t.Errorf("expected default format with date, got %s", output)
+	}
+}
+
+func TestConsoleNoColorTimeFormat(t *testing.T) {
+	var b bytes.Buffer
+
+	// Create console writer with syslog-style time format
+	writer := zerolog.ConsoleWriter{
+		Out:        &b,
+		NoColor:    true,
+		TimeFormat: "Jan 02 15:04:05",
+	}
+
+	cfg := logze.C().
+		WithLevel(logze.LevelDebug).
+		WithNoDiode()
+	cfg.Writers = []io.Writer{writer}
+
+	logger := logze.New(cfg)
+
+	now := time.Now()
+	logger.Info("test message")
+
+	output := b.String()
+
+	// Should contain month name (Jan, Feb, etc.)
+	expectedMonth := now.Format("Jan")
+	if !strings.Contains(output, expectedMonth) {
+		t.Errorf("expected syslog format with month name, got %s", output)
 	}
 }

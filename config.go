@@ -73,6 +73,12 @@ type Config struct {
 	// UNIX Time is faster and smaller than most timestamps
 	TimeFieldFormat string
 
+	// ConsoleTimeFormat is the time format for console output (ConsoleWriter).
+	// This only affects console output, not JSON output.
+	// Default value is "2006-01-02 15:04:05".
+	// Common formats: time.RFC3339, time.Kitchen, "15:04:05", etc.
+	ConsoleTimeFormat string
+
 	// Hook is a [zerolog.Hook] that will be used when creating [Logger].
 	// Default value is nil.
 	Hook zerolog.Hook
@@ -379,7 +385,7 @@ func (c Config) WithFile(filename string, perm ...os.FileMode) (Config, io.Close
 //
 //	config := logze.C().WithConsole() // For development/debugging
 func (c Config) WithConsole() Config {
-	return c.WithWriter(getConsoleWriter(os.Stderr, true))
+	return c.WithWriter(getConsoleWriter(os.Stderr, true, c.ConsoleTimeFormat))
 }
 
 // WithConsoleNoColor configures uncolored console output for human-readable logging.
@@ -393,7 +399,7 @@ func (c Config) WithConsole() Config {
 //
 //	config := logze.C().WithConsoleNoColor() // For CI/CD or simple terminals
 func (c Config) WithConsoleNoColor() Config {
-	return c.WithWriter(getConsoleWriter(os.Stderr, false))
+	return c.WithWriter(getConsoleWriter(os.Stderr, false, c.ConsoleTimeFormat))
 }
 
 // WithConsoleJSON configures structured JSON output to stderr.
@@ -453,6 +459,31 @@ func (c Config) WithToIgnoreRegex(patterns ...string) Config {
 // UNIX Time is faster and smaller than most timestamps
 func (c Config) WithTimeFieldFormat(format string) Config {
 	c.TimeFieldFormat = format
+	return c
+}
+
+// WithConsoleTimeFormat returns [Config] with a custom time format for console output.
+// This only affects the ConsoleWriter output format, not JSON output.
+//
+// The format string uses Go's time formatting layout (e.g., "2006-01-02 15:04:05").
+// Common formats:
+//   - "2006-01-02 15:04:05" (default)
+//   - time.RFC3339 ("2006-01-02T15:04:05Z07:00")
+//   - time.Kitchen ("3:04PM")
+//   - "15:04:05" (time only)
+//   - "Jan 02 15:04:05" (syslog style)
+//
+// Example usage:
+//
+//	config := logze.C().
+//		WithConsole().
+//		WithConsoleTimeFormat(time.Kitchen)  // Shows "3:04PM"
+//
+//	config := logze.C().
+//		WithConsole().
+//		WithConsoleTimeFormat("15:04:05")    // Shows "14:30:45"
+func (c Config) WithConsoleTimeFormat(format string) Config {
+	c.ConsoleTimeFormat = format
 	return c
 }
 
@@ -629,11 +660,14 @@ func getLevelSampler(sampler zerolog.Sampler, levels ...string) zerolog.Sampler 
 	return resultSampler
 }
 
-func getConsoleWriter(w io.Writer, color bool) zerolog.ConsoleWriter {
+func getConsoleWriter(w io.Writer, color bool, timeFormat string) zerolog.ConsoleWriter {
+	if timeFormat == "" {
+		timeFormat = "2006-01-02 15:04:05"
+	}
 	return zerolog.ConsoleWriter{
 		Out:        w,
 		NoColor:    !color,
-		TimeFormat: "2006-01-02 15:04:05",
+		TimeFormat: timeFormat,
 	}
 }
 
