@@ -1631,11 +1631,11 @@ func TestHTTPError(t *testing.T) {
 
 func TestHTTPAuto(t *testing.T) {
 	tests := []struct {
-		name           string
-		status         int
-		err            error
-		expectedLevel  string
-		expectedMsg    string
+		name          string
+		status        int
+		err           error
+		expectedLevel string
+		expectedMsg   string
 	}{
 		{
 			name:          "success status",
@@ -1703,16 +1703,14 @@ func TestRecoverPanic(t *testing.T) {
 
 	// Test function that panics
 	func() {
-		defer logger.RecoverPanic("request_id", "abc123", "operation", "test")
+		defer logger.Recover("request_id", "abc123", "operation", "test")
 		panic("something went wrong")
 	}()
 
 	output := b.String()
 	expectedFields := []string{
 		`"level":"error"`,
-		`"message":"Panic recovered"`,
-		`"panic":"something went wrong"`,
-		`"stack"`,
+		`"error":"something went wrong"`,
 		`"request_id":"abc123"`,
 		`"operation":"test"`,
 	}
@@ -1731,7 +1729,7 @@ func TestRecoverPanicNoPanic(t *testing.T) {
 
 	// Test function that doesn't panic
 	func() {
-		defer logger.RecoverPanic("request_id", "abc123")
+		defer logger.Recover("request_id", "abc123")
 		// No panic
 	}()
 
@@ -1751,7 +1749,7 @@ func TestRecoverPanicWithCallback(t *testing.T) {
 
 	// Test function that panics
 	func() {
-		defer logger.RecoverPanicWithCallback(func(p interface{}) {
+		defer logger.RecoverWithCallback(func(p interface{}) {
 			callbackCalled = true
 			panicValue = p
 		}, "request_id", "abc123")
@@ -1768,9 +1766,7 @@ func TestRecoverPanicWithCallback(t *testing.T) {
 	output := b.String()
 	expectedFields := []string{
 		`"level":"error"`,
-		`"message":"Panic recovered"`,
-		`"panic":"test panic"`,
-		`"stack"`,
+		`"error":"test panic"`,
 		`"request_id":"abc123"`,
 	}
 
@@ -1790,7 +1786,7 @@ func TestRecoverPanicWithCallbackNoPanic(t *testing.T) {
 
 	// Test function that doesn't panic
 	func() {
-		defer logger.RecoverPanicWithCallback(func(p interface{}) {
+		defer logger.RecoverWithCallback(func(p interface{}) {
 			callbackCalled = true
 		}, "request_id", "abc123")
 		// No panic
@@ -1813,13 +1809,13 @@ func TestRecoverPanicWithNilCallback(t *testing.T) {
 
 	// Test function that panics with nil callback
 	func() {
-		defer logger.RecoverPanicWithCallback(nil, "request_id", "abc123")
+		defer logger.RecoverWithCallback(nil, "request_id", "abc123")
 		panic("test panic")
 	}()
 
 	// Should not panic even with nil callback
 	output := b.String()
-	if !strings.Contains(output, `"panic":"test panic"`) {
+	if !strings.Contains(output, `"error":"test panic"`) {
 		t.Errorf("expected panic to be logged, got %s", output)
 	}
 }
