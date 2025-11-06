@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -37,13 +38,14 @@ import (
 //	logger.Info("User logged in", "user_id", 123, "ip", "192.168.1.1")
 //	logger.Err(err, "Failed to process request", "request_id", "abc123")
 type Logger struct {
-	l           zerolog.Logger
-	errCounter  ErrorCounter
-	toIgnore    []string
-	ignoreMap   map[string]struct{} // Pre-compiled ignore map for O(1) lookup
-	stackTrace  bool
-	inited      bool
-	diodeWriter *diode.Writer
+	l             zerolog.Logger
+	errCounter    ErrorCounter
+	toIgnore      []string
+	ignoreMap     map[string]struct{} // Pre-compiled ignore map for O(1) lookup
+	toIgnoreRegex []*regexp.Regexp
+	stackTrace    bool
+	inited        bool
+	diodeWriter   *diode.Writer
 }
 
 // New creates a new [Logger] instance with the specified configuration and default fields.
@@ -158,13 +160,14 @@ func New(cfg Config, fields ...interface{}) Logger {
 	}
 
 	return Logger{
-		l:           l,
-		toIgnore:    cfg.ToIgnore,
-		ignoreMap:   ignoreMap,
-		errCounter:  cfg.ErrorCounter,
-		stackTrace:  cfg.StackTrace,
-		inited:      true,
-		diodeWriter: diodeWriter,
+		l:             l,
+		toIgnore:      cfg.ToIgnore,
+		ignoreMap:     ignoreMap,
+		toIgnoreRegex: cfg.ToIgnoreRegex,
+		errCounter:    cfg.ErrorCounter,
+		stackTrace:    cfg.StackTrace,
+		inited:        true,
+		diodeWriter:   diodeWriter,
 	}
 }
 
@@ -402,13 +405,14 @@ func (l Logger) NotInited() bool {
 // Fields can be interface{} JSON-serializable values: strings, numbers, booleans, slices, maps.
 func (l Logger) WithFields(fields ...interface{}) Logger {
 	return Logger{
-		l:           l.l.With().Fields(fields).Logger(),
-		errCounter:  l.errCounter,
-		toIgnore:    l.toIgnore,
-		ignoreMap:   l.ignoreMap,
-		stackTrace:  l.stackTrace,
-		inited:      l.inited,
-		diodeWriter: l.diodeWriter,
+		l:             l.l.With().Fields(fields).Logger(),
+		errCounter:    l.errCounter,
+		toIgnore:      l.toIgnore,
+		ignoreMap:     l.ignoreMap,
+		toIgnoreRegex: l.toIgnoreRegex,
+		stackTrace:    l.stackTrace,
+		inited:        l.inited,
+		diodeWriter:   l.diodeWriter,
 	}
 }
 
@@ -1279,6 +1283,15 @@ func (l Logger) log(ev *zerolog.Event, msg string, fields []interface{}) {
 		}
 	}
 
+	// Check regex patterns
+	if len(l.toIgnoreRegex) > 0 {
+		for _, re := range l.toIgnoreRegex {
+			if re.MatchString(msg) {
+				return
+			}
+		}
+	}
+
 	if len(fields) > 0 {
 		ev, fields = l.setErrorWithStack(ev, false, fields...)
 		ev = ev.Fields(fields)
@@ -1298,6 +1311,15 @@ func (l Logger) logf(ev *zerolog.Event, msg string, args []interface{}) {
 	if len(l.toIgnore) > 0 {
 		for _, ignore := range l.toIgnore {
 			if strings.Contains(msg, ignore) {
+				return
+			}
+		}
+	}
+
+	// Check regex patterns
+	if len(l.toIgnoreRegex) > 0 {
+		for _, re := range l.toIgnoreRegex {
+			if re.MatchString(msg) {
 				return
 			}
 		}
