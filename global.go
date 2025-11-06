@@ -2,12 +2,16 @@ package logze
 
 import (
 	stdlog "log"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
 )
 
-var log = NewConsoleJSON()
+var (
+	log   = NewConsoleJSON()
+	logMu sync.RWMutex
+)
 
 // Default returns a copy of the global logger instance.
 //
@@ -18,11 +22,15 @@ var log = NewConsoleJSON()
 // Use this when you want to add request-specific or component-specific fields
 // to a logger without affecting other parts of your application.
 //
+// This function is thread-safe and uses a read lock for concurrent access.
+//
 // Example usage:
 //
 //	logger := logze.Default().With("component", "auth", "request_id", reqID)
 //	logger.Info("User authenticated") // Includes component and request_id
 func Default() Logger {
+	logMu.RLock()
+	defer logMu.RUnlock()
 	return log
 }
 
@@ -42,12 +50,17 @@ func D() Logger {
 // working with APIs that expect a pointer.
 //
 // ⚠️ Warning: Modifying the returned logger affects the global instance.
+// ⚠️ Thread Safety: This function acquires a read lock. Do not call Update()
+// or other mutating operations on the global logger while holding the pointer,
+// as this may cause deadlocks.
 //
 // Example usage:
 //
 //	ptr := logze.DefaultPtr()
 //	// Be careful: changes affect global instance
 func DefaultPtr() *Logger {
+	logMu.RLock()
+	defer logMu.RUnlock()
 	return &log
 }
 
@@ -66,6 +79,8 @@ func DP() *Logger {
 // (Info, Error, etc.) and Default()/D() functions. Use this to configure
 // global logging behavior for your entire application.
 //
+// This function is thread-safe and uses a write lock for exclusive access.
+//
 // Example usage:
 //
 //	logger := logze.New(logze.C(fileWriter).WithLevel("warn").WithSimpleErrorCounter())
@@ -74,6 +89,8 @@ func DP() *Logger {
 //	// Now all package-level logging uses the new configuration
 //	logze.Info("This uses the new global logger")
 func SetDefault(l Logger) {
+	logMu.Lock()
+	defer logMu.Unlock()
 	log = l
 }
 
@@ -86,6 +103,8 @@ func SetDefault(l Logger) {
 // This is typically called once during application startup to establish
 // global logging configuration.
 //
+// This function is thread-safe and uses a write lock for exclusive access.
+//
 // Example usage:
 //
 //	config := logze.C(logFile).WithLevel("info").WithSimpleErrorCounter()
@@ -95,6 +114,8 @@ func SetDefault(l Logger) {
 //	logze.Info("Application started")
 //	log.Println("This also goes through logze")
 func Init(cfg Config, fields ...interface{}) {
+	logMu.Lock()
+	defer logMu.Unlock()
 	log = New(cfg, fields...)
 	SetStdLogger(log)
 }
@@ -105,10 +126,8 @@ func Init(cfg Config, fields ...interface{}) {
 // replacing its configuration, output writers, level, and other settings.
 // It also reconfigures the standard library log package.
 //
-// ⚠️ THREAD SAFETY WARNING: This function is NOT safe for concurrent use.
-// Ensure no other goroutines are using the global logger while calling Update.
-// Consider using a mutex or other synchronization mechanism if you need to
-// update the global logger from multiple goroutines.
+// This function is thread-safe and uses a write lock for exclusive access.
+// It properly closes the old diode writer to prevent goroutine leaks.
 //
 // Example usage:
 //
@@ -116,6 +135,8 @@ func Init(cfg Config, fields ...interface{}) {
 //	prodConfig := logze.C(prodFile).WithLevel("warn").WithNoDiode()
 //	logze.Update(prodConfig, "environment", "production")
 func Update(cfg Config, fields ...interface{}) {
+	logMu.Lock()
+	defer logMu.Unlock()
 	log.Update(cfg, fields...)
 	SetStdLogger(log)
 }
@@ -148,11 +169,15 @@ func SetStdLogger(l Logger, fields ...interface{}) {
 //
 // Fields should be provided as alternating key-value pairs.
 //
+// This function is thread-safe and uses a read lock for concurrent access.
+//
 // Example usage:
 //
 //	requestLogger := logze.WithFields("request_id", "abc123", "user_id", 456)
 //	requestLogger.Info("Processing request") // Includes request_id and user_id
 func WithFields(fields ...interface{}) Logger {
+	logMu.RLock()
+	defer logMu.RUnlock()
 	return log.WithFields(fields...)
 }
 
@@ -240,95 +265,148 @@ func WithMaxSampler(max int, period time.Duration, levels ...string) Logger {
 }
 
 // Trace logs a message in trace level adding provided fields and information about method caller
-// using a global logger.
+// using a global logger. This function is thread-safe.
 func Trace(msg string, fields ...interface{}) {
-	log.log(log.l.Trace().Caller(1), msg, fields)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.log(l.l.Trace().Caller(1), msg, fields)
 }
 
 // Tracef logs a formatted message in trace level adding provided fields after formatting args
-// and information about method caller using a global logger.
+// and information about method caller using a global logger. This function is thread-safe.
 func Tracef(msg string, args ...interface{}) {
-	log.logf(log.l.Trace().Caller(1), msg, args)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.logf(l.l.Trace().Caller(1), msg, args)
 }
 
 // TraceIf logs a message in trace level adding provided fields and information about method caller if condition is true.
+// This function is thread-safe.
 func TraceIf(condition bool, msg string, fields ...interface{}) {
-	log.TraceIf(condition, msg, fields...)
+	if condition {
+		Trace(msg, fields...)
+	}
 }
 
-// Debug logs a message in debug level adding provided fields using a global logger.
+// Debug logs a message in debug level adding provided fields using a global logger. This function is thread-safe.
 func Debug(msg string, fields ...interface{}) {
-	log.Debug(msg, fields...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.Debug(msg, fields...)
 }
 
 // Debugf logs a formatted message in debug level adding provided fields after formatting args using a global logger.
+// This function is thread-safe.
 func Debugf(msg string, args ...interface{}) {
-	log.Debugf(msg, args...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.Debugf(msg, args...)
 }
 
-// DebugIf logs a message in debug level adding provided fields if condition is true.
+// DebugIf logs a message in debug level adding provided fields if condition is true. This function is thread-safe.
 func DebugIf(condition bool, msg string, fields ...interface{}) {
-	log.DebugIf(condition, msg, fields...)
+	if condition {
+		Debug(msg, fields...)
+	}
 }
 
-// Info logs a message in info level adding provided fields using a global logger.
+// Info logs a message in info level adding provided fields using a global logger. This function is thread-safe.
 func Info(msg string, fields ...interface{}) {
-	log.Info(msg, fields...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.Info(msg, fields...)
 }
 
 // Infof logs a formatted message in info level adding provided fields after formatting args using a global logger.
+// This function is thread-safe.
 func Infof(msg string, args ...interface{}) {
-	log.Infof(msg, args...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.Infof(msg, args...)
 }
 
-// InfoIf logs a message in info level adding provided fields if condition is true.
+// InfoIf logs a message in info level adding provided fields if condition is true. This function is thread-safe.
 func InfoIf(condition bool, msg string, fields ...interface{}) {
-	log.InfoIf(condition, msg, fields...)
+	if condition {
+		Info(msg, fields...)
+	}
 }
 
-// Warn logs a message in warning level adding provided fields using a global logger.
+// Warn logs a message in warning level adding provided fields using a global logger. This function is thread-safe.
 func Warn(msg string, fields ...interface{}) {
-	log.Warn(msg, fields...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.Warn(msg, fields...)
 }
 
 // Warnf logs a formatted message in warn level adding provided fields after formatting args using a global logger.
+// This function is thread-safe.
 func Warnf(msg string, args ...interface{}) {
-	log.Warnf(msg, args...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.Warnf(msg, args...)
 }
 
-// WarnIf logs a message in warning level adding provided fields if condition is true.
+// WarnIf logs a message in warning level adding provided fields if condition is true. This function is thread-safe.
 func WarnIf(condition bool, msg string, fields ...interface{}) {
-	log.WarnIf(condition, msg, fields...)
+	if condition {
+		Warn(msg, fields...)
+	}
 }
 
-// Err logs a provided error in error level adding provided fields using a global logger.
+// Err logs a provided error in error level adding provided fields using a global logger. This function is thread-safe.
 func Err(err error, msg string, fields ...interface{}) {
-	log.Err(err, msg, fields...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.Err(err, msg, fields...)
 }
 
-// ErrIf logs a provided error in error level adding provided fields if condition is true.
+// ErrIf logs a provided error in error level adding provided fields if condition is true. This function is thread-safe.
 func ErrIf(condition bool, err error, msg string, fields ...interface{}) {
-	log.ErrIf(condition, err, msg, fields...)
+	if condition {
+		Err(err, msg, fields...)
+	}
 }
 
-// Error logs a message in error level adding provided fields using a global logger.
+// Error logs a message in error level adding provided fields using a global logger. This function is thread-safe.
 func Error(msg string, fields ...interface{}) {
-	log.Error(msg, fields...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.Error(msg, fields...)
 }
 
 // Errorf logs a formatted message in error level adding provided fields after formatting args using a global logger.
+// This function is thread-safe.
 func Errorf(msg string, args ...interface{}) {
-	log.Errorf(msg, args...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.Errorf(msg, args...)
 }
 
-// ErrorIf logs a message in error level adding provided fields if condition is true.
+// ErrorIf logs a message in error level adding provided fields if condition is true. This function is thread-safe.
 func ErrorIf(condition bool, msg string, fields ...interface{}) {
-	log.ErrorIf(condition, msg, fields...)
+	if condition {
+		Error(msg, fields...)
+	}
 }
 
-// ErrStack logs a stack trace of provided error as message in error level adding fields.
+// ErrStack logs a stack trace of provided error as message in error level adding fields. This function is thread-safe.
 func ErrStack(err error, fields ...interface{}) {
-	log.ErrStack(err, fields...)
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	l.ErrStack(err, fields...)
 }
 
 // FatalIf logs a message in fatal level adding provided fields if condition is true, then calls os.Exit(1).

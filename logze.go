@@ -379,12 +379,25 @@ func (l Logger) NotInited() bool {
 //
 // This method returns a new logger instance; the original logger is not modified.
 //
+// ⚠️ IMPORTANT: Resource Sharing
+//
+// The returned logger shares certain resources with the parent logger:
+//   - diodeWriter: Both loggers use the same underlying diode writer. Closing either
+//     the parent or derived logger will affect both. If you need independent lifecycle
+//     management, create a new logger with New() instead of deriving.
+//   - errCounter: The error counter is shared, so errors logged by either logger
+//     increment the same counter.
+//   - toIgnore/ignoreMap: Message filtering configuration is shared.
+//
 // Example usage:
 //
 //	baseLogger := logze.NewConsoleJSON("service", "api")
 //	requestLogger := baseLogger.WithFields("request_id", "abc123", "user_id", 456)
 //	requestLogger.Info("Processing request")
 //	// Output includes: "service":"api","request_id":"abc123","user_id":456
+//
+//	// ⚠️ Be careful with lifecycle:
+//	defer baseLogger.Close() // This also closes requestLogger's diode writer!
 //
 // Fields can be interface{} JSON-serializable values: strings, numbers, booleans, slices, maps.
 func (l Logger) WithFields(fields ...interface{}) Logger {
@@ -1326,20 +1339,28 @@ func (l Logger) setErrorWithStack(ev *zerolog.Event, inFormat bool, args ...inte
 		l.incErrorCounter(err)
 		if !inFormat {
 			// Remove the error from fields to avoid duplicate logging
-			// For key-value pairs, we need to remove both key and value if error is a value
-			if i > 0 && i%2 == 1 {
-				// Error is at odd position (value position), remove key-value pair
+			// The error is logged via ev.Err(err) below, so we remove it from the fields
+			if i == 0 {
+				// Error is at the beginning, remove it
+				newFields = args[1:]
+			} else if i%2 == 1 {
+				// Error is at odd position (value in key-value pair)
+				// Remove both the key (at i-1) and the error (at i)
 				newFields = make([]interface{}, 0, len(args)-2)
 				newFields = append(newFields, args[:i-1]...)
 				newFields = append(newFields, args[i+1:]...)
-			} else if i == 0 {
-				// Error is at the beginning
-				newFields = args[1:]
 			} else {
-				// Error is at even position (key position), only remove the error
-				newFields = make([]interface{}, 0, len(args)-1)
-				newFields = append(newFields, args[:i]...)
-				newFields = append(newFields, args[i+1:]...)
+				// Error is at even position > 0 (used as a key, unusual but possible)
+				// Remove the error and the following value to maintain key-value pairing
+				if i+1 < len(args) {
+					// Remove error and next value
+					newFields = make([]interface{}, 0, len(args)-2)
+					newFields = append(newFields, args[:i]...)
+					newFields = append(newFields, args[i+2:]...)
+				} else {
+					// Error is the last element, just remove it
+					newFields = args[:i]
+				}
 			}
 		}
 		return ev.Err(err), newFields
