@@ -2287,3 +2287,133 @@ func TestInspectionMethodsTogether(t *testing.T) {
 		t.Error("expected SimpleErrorCounter type")
 	}
 }
+
+func TestInfoCtx(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	// Test with active context
+	ctx := context.Background()
+	logger.InfoCtx(ctx, "test message", "key", "value")
+
+	output := b.String()
+	if !strings.Contains(output, "test message") {
+		t.Errorf("expected 'test message' in output, got %s", output)
+	}
+	b.Reset()
+
+	// Test with cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	logger.InfoCtx(ctx, "should not log", "key", "value")
+
+	output = b.String()
+	if output != "" {
+		t.Errorf("expected no output for cancelled context, got %s", output)
+	}
+}
+
+func TestDebugCtx(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	ctx := context.Background()
+	logger.DebugCtx(ctx, "debug message")
+
+	if !strings.Contains(b.String(), "debug message") {
+		t.Errorf("expected 'debug message' in output, got %s", b.String())
+	}
+	b.Reset()
+
+	// Cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	logger.DebugCtx(ctx, "should not log")
+
+	if b.String() != "" {
+		t.Errorf("expected no output for cancelled context, got %s", b.String())
+	}
+}
+
+func TestErrCtx(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	ctx := context.Background()
+	err := errors.New("test error")
+	logger.ErrCtx(ctx, err, "error occurred", "key", "value")
+
+	output := b.String()
+	if !strings.Contains(output, "test error") {
+		t.Errorf("expected 'test error' in output, got %s", output)
+	}
+	if !strings.Contains(output, "error occurred") {
+		t.Errorf("expected 'error occurred' in output, got %s", output)
+	}
+	b.Reset()
+
+	// Cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	logger.ErrCtx(ctx, err, "should not log", "key", "value")
+
+	output = b.String()
+	if output != "" {
+		t.Errorf("expected no output for cancelled context, got %s", output)
+	}
+}
+
+func TestContextLoggingLevels(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelTrace).WithNoDiode()
+	logger := logze.New(cfg)
+
+	ctx := context.Background()
+
+	// Test all context-aware logging levels
+	logger.TraceCtx(ctx, "trace message")
+	logger.DebugCtx(ctx, "debug message")
+	logger.InfoCtx(ctx, "info message")
+	logger.WarnCtx(ctx, "warn message")
+	logger.ErrorCtx(ctx, "error message")
+
+	output := b.String()
+	expectedMessages := []string{
+		"trace message",
+		"debug message",
+		"info message",
+		"warn message",
+		"error message",
+	}
+
+	for _, msg := range expectedMessages {
+		if !strings.Contains(output, msg) {
+			t.Errorf("expected '%s' in output, got %s", msg, output)
+		}
+	}
+}
+
+func TestContextWithTimeout(t *testing.T) {
+	var b bytes.Buffer
+	cfg := logze.NewConfig(&b).WithLevel(logze.LevelDebug).WithNoDiode()
+	logger := logze.New(cfg)
+
+	// Create context with very short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
+	// Wait for timeout
+	time.Sleep(10 * time.Millisecond)
+
+	// Try to log after timeout
+	logger.InfoCtx(ctx, "should not log")
+
+	output := b.String()
+	if output != "" {
+		t.Errorf("expected no output for timed out context, got %s", output)
+	}
+}
