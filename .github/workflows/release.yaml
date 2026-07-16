@@ -20,14 +20,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # semantic-release@25 and @semantic-release/github@12 require Node ^22.14
+          node-version: '22'
 
       - name: Install semantic-release
+        # Majors are pinned: unpinned installs break whenever semantic-release
+        # ships a major with new Node requirements.
+        # @semantic-release/npm is not installed: .releaserc.json lists the
+        # plugins explicitly and this Go module never publishes to npm.
         run: |
-          npm install -g semantic-release
-          npm install -g @semantic-release/github
-          npm install -g @semantic-release/npm
-          npm install -g conventional-changelog-conventionalcommits
+          npm install -g semantic-release@25
+          npm install -g @semantic-release/github@12
+          npm install -g conventional-changelog-conventionalcommits@10
 
       - name: Release
         env:
