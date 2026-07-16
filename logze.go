@@ -47,6 +47,7 @@ type Logger struct {
 	stackTrace    bool
 	inited        bool
 	diodeWriter   *diode.Writer
+	output        io.Writer // pre-diode writer, used by Fatal* for guaranteed synchronous writes
 }
 
 // New creates a new [Logger] instance with the specified configuration and default fields.
@@ -119,6 +120,7 @@ func New(cfg Config, fields ...interface{}) Logger {
 	if len(cfg.Writers) > 1 {
 		output = zerolog.MultiLevelWriter(cfg.Writers...)
 	}
+	rawOutput := output
 
 	var diodeWriter *diode.Writer
 	if !cfg.NoDiode {
@@ -174,6 +176,7 @@ func New(cfg Config, fields ...interface{}) Logger {
 		stackTrace:    cfg.StackTrace,
 		inited:        true,
 		diodeWriter:   diodeWriter,
+		output:        rawOutput,
 	}
 }
 
@@ -238,11 +241,17 @@ func Nop() Logger {
 	return Logger{l: zerolog.Nop()}
 }
 
-// CloseDiode gracefully shuts down the diode writer, ensuring all buffered log messages are flushed.
+// CloseDiode gracefully shuts down the diode writer, flushing buffered log messages.
 //
 // This method should be called before application shutdown when using the default diode writer
 // to prevent loss of buffered log messages. If no diode writer is configured, this method
 // returns nil and has no effect.
+//
+// Note: the flush is best effort. The underlying go-diodes poller has a tiny
+// window on close in which messages written immediately before CloseDiode can
+// be dropped. Use [Config.WithNoDiode] when guaranteed delivery of every
+// message is required. Fatal* methods are not affected: they write their
+// message synchronously past the diode.
 //
 // Example usage:
 //
@@ -412,6 +421,7 @@ func (l Logger) WithFields(fields ...interface{}) Logger {
 		stackTrace:    l.stackTrace,
 		inited:        l.inited,
 		diodeWriter:   l.diodeWriter,
+		output:        l.output,
 	}
 }
 
@@ -992,13 +1002,27 @@ func (l Logger) Erro(errRaw error, msg string, fields ...interface{}) {
 func (l Logger) Fatal(v ...interface{}) {
 	s := fmt.Sprint(v...)
 	l.incErrorCounter(errors.New(s))
-	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
-	l.CloseDiode() //nolint:errcheck // flush buffered logs before exit
+	l.log(l.fatalEvent(), s, nil)
 	osExit(1)
 }
 
 // osExit is an indirection over [os.Exit] so tests can intercept Fatal* methods.
 var osExit = os.Exit
+
+// fatalEvent returns a fatal-level event that is guaranteed to reach the
+// underlying writer before the process exits. When a diode writer is
+// configured, previously buffered messages are drained first (best effort:
+// the go-diodes poller has a small close window that can drop pending
+// entries) and the fatal entry itself is then written synchronously past
+// the diode, so it can never be lost.
+func (l Logger) fatalEvent() *zerolog.Event {
+	if l.diodeWriter != nil && l.output != nil {
+		l.CloseDiode() //nolint:errcheck // draining buffered logs before exit
+		direct := l.l.Output(l.output)
+		return direct.WithLevel(zerolog.FatalLevel)
+	}
+	return l.l.WithLevel(zerolog.FatalLevel)
+}
 
 // Fatalf logs a formatted fatal error message and immediately terminates the program with exit code 1.
 //
@@ -1015,8 +1039,7 @@ var osExit = os.Exit
 //	// Logs the formatted message and immediately exits with code 1
 func (l Logger) Fatalf(format string, args ...interface{}) {
 	l.incErrorCounter(fmt.Errorf(format, args...))
-	l.logf(l.l.WithLevel(zerolog.FatalLevel), format, args)
-	l.CloseDiode() //nolint:errcheck // flush buffered logs before exit
+	l.logf(l.fatalEvent(), format, args)
 	osExit(1)
 }
 
@@ -1053,8 +1076,7 @@ func (l Logger) FatalIf(condition bool, v ...interface{}) {
 func (l Logger) Fatalln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
 	l.incErrorCounter(errors.New(s))
-	l.log(l.l.WithLevel(zerolog.FatalLevel), s, nil)
-	l.CloseDiode() //nolint:errcheck // flush buffered logs before exit
+	l.log(l.fatalEvent(), s, nil)
 	osExit(1)
 }
 

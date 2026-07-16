@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// TestFatalFlushesDiode verifies that Fatal* methods drain the diode writer
-// before exiting, so the fatal message is never lost.
+// TestFatalFlushesDiode verifies that Fatal* methods write their message
+// synchronously past the diode writer before exiting, so it is never lost.
 func TestFatalFlushesDiode(t *testing.T) {
 	origExit := osExit
 	defer func() { osExit = origExit }()
@@ -35,10 +35,10 @@ func TestFatalFlushesDiode(t *testing.T) {
 			if exitCode != 1 {
 				t.Errorf("expected exit code 1, got %d", exitCode)
 			}
-			// CloseDiode has drained the poller before osExit was called,
-			// so the message must already be in the buffer.
+			// The fatal entry is written synchronously past the diode,
+			// so it must already be in the buffer.
 			if !strings.Contains(b.String(), tc.want) {
-				t.Errorf("expected %q flushed through the diode, got %q", tc.want, b.String())
+				t.Errorf("expected %q written before exit, got %q", tc.want, b.String())
 			}
 		})
 	}
