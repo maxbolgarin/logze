@@ -241,3 +241,24 @@ func BenchmarkLogzeErrStack(b *testing.B) {
 		logger.ErrStack(err, "key", "value", "number", 123)
 	}
 }
+
+// Disabled level paths — these should be nearly free
+
+func BenchmarkLogzeDisabledLevel(b *testing.B) {
+	var buffer bytes.Buffer
+	logger := logze.New(logze.NewConfig(&buffer).WithLevel(logze.LevelError).WithNoDiode())
+
+	for i := 0; i < b.N; i++ {
+		logger.Debug("debug message", "key", "value", "number", 123)
+	}
+}
+
+func BenchmarkLogzeDisabledErrWithStack(b *testing.B) {
+	var buffer bytes.Buffer
+	logger := logze.New(logze.NewConfig(&buffer).WithLevel(logze.LevelFatal).WithNoDiode()).WithStack()
+	err := errors.New("an error occurred")
+
+	for i := 0; i < b.N; i++ {
+		logger.Err(err, "error message", "key", "value", "number", 123)
+	}
+}
