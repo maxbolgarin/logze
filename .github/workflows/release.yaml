@@ -26,12 +26,14 @@ jobs:
       - name: Install semantic-release
         # Majors are pinned: unpinned installs break whenever semantic-release
         # ships a major with new Node requirements.
+        # conventionalcommits stays on @8: the new preset API in @9/@10 makes
+        # @semantic-release/release-notes-generator render empty release notes.
         # @semantic-release/npm is not installed: .releaserc.json lists the
         # plugins explicitly and this Go module never publishes to npm.
         run: |
           npm install -g semantic-release@25
           npm install -g @semantic-release/github@12
-          npm install -g conventional-changelog-conventionalcommits@10
+          npm install -g conventional-changelog-conventionalcommits@8
 
       - name: Release
         env:
