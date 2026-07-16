@@ -3,6 +3,7 @@ package logze
 import (
 	"context"
 	stdlog "log"
+	"os"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -11,9 +12,21 @@ import (
 )
 
 var (
-	log   = NewConsoleJSON()
+	// log is the global logger. It writes JSON to stderr synchronously (no diode
+	// writer), so importing logze never spawns a background goroutine and no
+	// buffered messages can be lost at exit. Use [Init] to install a configured
+	// logger ([New] enables the diode writer by default).
+	log   = New(NewConfig(os.Stderr).WithNoDiode())
 	logMu sync.RWMutex
 )
+
+// global returns a copy of the global logger taken under the read lock.
+func global() Logger {
+	logMu.RLock()
+	l := log
+	logMu.RUnlock()
+	return l
+}
 
 // Default returns a copy of the global logger instance.
 //
@@ -42,7 +55,7 @@ func Default() Logger {
 //
 //	logger := logze.D().With("user_id", userID)
 func D() Logger {
-	return log
+	return Default()
 }
 
 // DefaultPtr returns a pointer to the global logger instance.
@@ -72,7 +85,7 @@ func DefaultPtr() *Logger {
 //
 //	ptr := logze.DP()
 func DP() *Logger {
-	return &log
+	return DefaultPtr()
 }
 
 // SetDefault replaces the global logger with the provided logger instance.
@@ -161,7 +174,6 @@ func Update(cfg Config, fields ...interface{}) {
 func SetStdLogger(l Logger, fields ...interface{}) {
 	stdlog.SetFlags(0)
 	stdlog.SetOutput(l.WithFields(fields...))
-	log = l
 }
 
 // WithFields creates a logger with additional fields based on the global logger.
@@ -178,9 +190,7 @@ func SetStdLogger(l Logger, fields ...interface{}) {
 //	requestLogger := logze.WithFields("request_id", "abc123", "user_id", 456)
 //	requestLogger.Info("Processing request") // Includes request_id and user_id
 func WithFields(fields ...interface{}) Logger {
-	logMu.RLock()
-	defer logMu.RUnlock()
-	return log.WithFields(fields...)
+	return global().WithFields(fields...)
 }
 
 // With is a convenient shorthand for [WithFields].
@@ -189,7 +199,7 @@ func WithFields(fields ...interface{}) Logger {
 //
 //	logger := logze.With("component", "auth", "operation", "login")
 func With(fields ...interface{}) Logger {
-	return log.With(fields...)
+	return WithFields(fields...)
 }
 
 // WithLevel creates a logger with a specific log level based on the global logger.
@@ -202,85 +212,81 @@ func With(fields ...interface{}) Logger {
 //	debugLogger := logze.WithLevel("debug")
 //	debugLogger.Debug("This will be logged") // Even if global level is info
 func WithLevel(level string) Logger {
-	return log.WithLevel(level)
+	return global().WithLevel(level)
 }
 
 // WithErrorCounter returns [Logger] with the provided [ErrorCounter], based on a global logger.
 func WithErrorCounter(ec ErrorCounter) Logger {
-	return log.WithErrorCounter(ec)
+	return global().WithErrorCounter(ec)
 }
 
 // WithSimpleErrorCounter returns [Logger] with a simple [ErrorCounter],
 // based on a global logger.
 func WithSimpleErrorCounter() Logger {
-	return log.WithSimpleErrorCounter()
+	return global().WithSimpleErrorCounter()
 }
 
 // WithToIgnore returns [Logger] with the provided list of messages to ignore based on a global logger.
 func WithToIgnore(toIgnore ...string) Logger {
-	return log.WithToIgnore(toIgnore...)
+	return global().WithToIgnore(toIgnore...)
 }
 
 // WithCaller returns [Logger] with the provided caller skip frame count based on a global logger.
 func WithCaller(callerSkipFrameCount int) Logger {
-	return log.WithCaller(callerSkipFrameCount)
+	return global().WithCaller(callerSkipFrameCount)
 }
 
 // WithDefaultCaller returns [Logger] with the default caller skip frame count based on a global logger.
 func WithDefaultCaller() Logger {
-	return log.WithDefaultCaller()
+	return global().WithDefaultCaller()
 }
 
 // GetErrorCounter returns Logger's underlying [ErrorCounter] from global logger.
 func GetErrorCounter() ErrorCounter {
-	return log.GetErrorCounter()
+	return global().GetErrorCounter()
 }
 
 // CloseDiode closes the underlying [diode.Writer] if it is used.
 func CloseDiode() error {
-	return log.CloseDiode()
+	return global().CloseDiode()
 }
 
 // Close closes the underlying [diode.Writer] if it is used.
 func Close() error {
-	return log.Close()
+	return global().Close()
 }
 
 // WithSampler returns [Logger] with the provided [zerolog.Sampler].
 func WithSampler(sampler zerolog.Sampler) Logger {
-	return log.WithSampler(sampler)
+	return global().WithSampler(sampler)
 }
 
 // WithPercentageSampler returns [Logger] with the provided percentage sampler.
 func WithPercentageSampler(percentage float64, levels ...string) Logger {
-	return log.WithPercentageSampler(percentage, levels...)
+	return global().WithPercentageSampler(percentage, levels...)
 }
 
 // WithBurstSampler returns [Logger] with the provided burst sampler.
 func WithBurstSampler(percentage float64, burst int, period time.Duration, levels ...string) Logger {
-	return log.WithBurstSampler(percentage, burst, period, levels...)
+	return global().WithBurstSampler(percentage, burst, period, levels...)
 }
 
 // WithMaxSampler returns [Logger] with the provided max sampler.
 func WithMaxSampler(max int, period time.Duration, levels ...string) Logger {
-	return log.WithMaxSampler(max, period, levels...)
+	return global().WithMaxSampler(max, period, levels...)
 }
 
 // Trace logs a message in trace level adding provided fields and information about method caller
 // using a global logger. This function is thread-safe.
 func Trace(msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.log(l.l.Trace().Caller(1), msg, fields)
 }
 
 // Tracef logs a formatted message in trace level adding provided fields after formatting args
 // and information about method caller using a global logger. This function is thread-safe.
 func Tracef(msg string, args ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.logf(l.l.Trace().Caller(1), msg, args)
 }
 
@@ -294,18 +300,14 @@ func TraceIf(condition bool, msg string, fields ...interface{}) {
 
 // Debug logs a message in debug level adding provided fields using a global logger. This function is thread-safe.
 func Debug(msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.Debug(msg, fields...)
 }
 
 // Debugf logs a formatted message in debug level adding provided fields after formatting args using a global logger.
 // This function is thread-safe.
 func Debugf(msg string, args ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.Debugf(msg, args...)
 }
 
@@ -318,18 +320,14 @@ func DebugIf(condition bool, msg string, fields ...interface{}) {
 
 // Info logs a message in info level adding provided fields using a global logger. This function is thread-safe.
 func Info(msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.Info(msg, fields...)
 }
 
 // Infof logs a formatted message in info level adding provided fields after formatting args using a global logger.
 // This function is thread-safe.
 func Infof(msg string, args ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.Infof(msg, args...)
 }
 
@@ -342,18 +340,14 @@ func InfoIf(condition bool, msg string, fields ...interface{}) {
 
 // Warn logs a message in warning level adding provided fields using a global logger. This function is thread-safe.
 func Warn(msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.Warn(msg, fields...)
 }
 
 // Warnf logs a formatted message in warn level adding provided fields after formatting args using a global logger.
 // This function is thread-safe.
 func Warnf(msg string, args ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.Warnf(msg, args...)
 }
 
@@ -366,9 +360,7 @@ func WarnIf(condition bool, msg string, fields ...interface{}) {
 
 // Err logs a provided error in error level adding provided fields using a global logger. This function is thread-safe.
 func Err(err error, msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.Err(err, msg, fields...)
 }
 
@@ -381,18 +373,14 @@ func ErrIf(condition bool, err error, msg string, fields ...interface{}) {
 
 // Error logs a message in error level adding provided fields using a global logger. This function is thread-safe.
 func Error(msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.Error(msg, fields...)
 }
 
 // Errorf logs a formatted message in error level adding provided fields after formatting args using a global logger.
 // This function is thread-safe.
 func Errorf(msg string, args ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.Errorf(msg, args...)
 }
 
@@ -405,91 +393,89 @@ func ErrorIf(condition bool, msg string, fields ...interface{}) {
 
 // ErrStack logs a stack trace of provided error as message in error level adding fields. This function is thread-safe.
 func ErrStack(err error, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.ErrStack(err, fields...)
 }
 
 // FatalIf logs a message in fatal level adding provided fields if condition is true, then calls os.Exit(1).
 func FatalIf(condition bool, v ...interface{}) {
-	log.FatalIf(condition, v...)
+	global().FatalIf(condition, v...)
 }
 
-// Fatal logs a message in fatal level using fmt.Sprint to interpret args sing a global logger, then calls os.Exit(1).
+// Fatal logs a message in fatal level using fmt.Sprint to interpret args using a global logger, then calls os.Exit(1).
 func Fatal(v ...interface{}) {
-	log.Fatal(v...)
+	global().Fatal(v...)
 }
 
 // Fatalf logs a formatted message in fatal level using a global logger, then calls os.Exit(1).
 func Fatalf(format string, args ...interface{}) {
-	log.Fatalf(format, args...)
+	global().Fatalf(format, args...)
 }
 
 // Fatalln logs a message in fatal level using fmt.Sprintln to interpret args using a global logger, then calls os.Exit(1).
 func Fatalln(v ...interface{}) {
-	log.Fatalln(v...)
+	global().Fatalln(v...)
 }
 
 // PanicIf logs a message in fatal level adding provided fields if condition is true, then calls panic().
 func PanicIf(condition bool, v ...interface{}) {
-	log.PanicIf(condition, v...)
+	global().PanicIf(condition, v...)
 }
 
 // Panic logs a message in fatal level using fmt.Sprint to interpret args using a global logger, then calls panic().
 func Panic(v ...interface{}) {
-	log.Panic(v...)
+	global().Panic(v...)
 }
 
 // Panicf logs a formatted message in fatal level using a global logger, then calls panic().
 func Panicf(format string, args ...interface{}) {
-	log.Panicf(format, args...)
+	global().Panicf(format, args...)
 }
 
 // Panicln logs a message in fatal level using fmt.Sprintln to interpret args using a global logger, then calls panic().
 func Panicln(v ...interface{}) {
-	log.Panicln(v...)
+	global().Panicln(v...)
 }
 
 // Print logs a message without level using [fmt.Sprint] to interpret args using a global logger.
 func Print(v ...interface{}) {
-	log.Print(v...)
+	global().Print(v...)
 }
 
 // PrintIf logs a message without level using [fmt.Sprint] to interpret args if condition is true.
 func PrintIf(condition bool, v ...interface{}) {
-	log.PrintIf(condition, v...)
+	global().PrintIf(condition, v...)
 }
 
 // PrintStack logs a current stack trace.
 func PrintStack(v ...interface{}) {
-	log.PrintStack(v...)
+	global().PrintStack(v...)
 }
 
 // Log logs a message without level using [fmt.Sprint] to interpret args using a global logger.
 // It is an alias for [Print].
 func Log(v ...interface{}) {
-	log.Log(v...)
+	global().Log(v...)
 }
 
 // Printf logs a formatted message without level using a global logger.
 func Printf(format string, args ...interface{}) {
-	log.Printf(format, args...)
+	global().Printf(format, args...)
 }
 
 // Println writes a message without level using fmt.Sprintln to interpret args using a global logger.
 func Println(v ...interface{}) {
-	log.Println(v...)
+	global().Println(v...)
 }
 
 // Write writes bytes to underlying [io.Writer] using a global logger.
 func Write(p []byte) (n int, err error) {
-	return log.Write(p)
+	return global().Write(p)
 }
 
 // Raw returns Logger's underlying [zerolog.Logger] from global logger.
 func Raw() *zerolog.Logger {
-	return log.Raw()
+	return global().Raw()
 }
 
 // HTTP logs an HTTP request at debug level with standardized fields using a global logger.
@@ -508,9 +494,7 @@ func Raw() *zerolog.Logger {
 //	// ... handle request
 //	logze.HTTP("GET", "/api/users", 200, time.Since(start), "user_id", userID)
 func HTTP(method, path string, status int, duration time.Duration, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.HTTP(method, path, status, duration, fields...)
 }
 
@@ -530,9 +514,7 @@ func HTTP(method, path string, status int, duration time.Duration, fields ...int
 //	    logze.HTTPError("POST", "/api/orders", 500, err, "order_id", orderID)
 //	}
 func HTTPError(method, path string, status int, err error, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.HTTPError(method, path, status, err, fields...)
 }
 
@@ -558,9 +540,7 @@ func HTTPError(method, path string, status int, err error, fields ...interface{}
 //	resp, err := client.Call()
 //	logze.HTTPAuto("GET", "/api/products", resp.StatusCode, time.Since(start), err, "product_id", prodID)
 func HTTPAuto(method, path string, status int, duration time.Duration, err error, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.HTTPAuto(method, path, status, duration, err, fields...)
 }
 
@@ -588,9 +568,7 @@ func HTTPAuto(method, path string, status int, duration time.Duration, err error
 //	    processData()
 //	}
 func Recover(fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	if r := recover(); r != nil {
 		stack := debug.Stack()
 		f := make([]interface{}, 0, len(fields)+2)
@@ -624,9 +602,7 @@ func Recover(fields ...interface{}) {
 //	    // ... code that might panic
 //	}
 func RecoverWithCallback(callback func(interface{}), fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	// We need to call the method directly to ensure recover() works in the defer chain
 	if r := recover(); r != nil {
 		stack := debug.Stack()
@@ -659,9 +635,7 @@ func RecoverWithCallback(callback func(interface{}), fields ...interface{}) {
 //	    // If request is cancelled, log won't be written
 //	}
 func InfoCtx(ctx context.Context, msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.InfoCtx(ctx, msg, fields...)
 }
 
@@ -669,9 +643,7 @@ func InfoCtx(ctx context.Context, msg string, fields ...interface{}) {
 // This function is thread-safe.
 // See InfoCtx for details about context checking behavior.
 func DebugCtx(ctx context.Context, msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.DebugCtx(ctx, msg, fields...)
 }
 
@@ -679,9 +651,7 @@ func DebugCtx(ctx context.Context, msg string, fields ...interface{}) {
 // This function is thread-safe.
 // See InfoCtx for details about context checking behavior.
 func TraceCtx(ctx context.Context, msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.TraceCtx(ctx, msg, fields...)
 }
 
@@ -689,9 +659,7 @@ func TraceCtx(ctx context.Context, msg string, fields ...interface{}) {
 // This function is thread-safe.
 // See InfoCtx for details about context checking behavior.
 func WarnCtx(ctx context.Context, msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.WarnCtx(ctx, msg, fields...)
 }
 
@@ -699,9 +667,7 @@ func WarnCtx(ctx context.Context, msg string, fields ...interface{}) {
 // This function is thread-safe.
 // See InfoCtx for details about context checking behavior.
 func ErrorCtx(ctx context.Context, msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.ErrorCtx(ctx, msg, fields...)
 }
 
@@ -729,8 +695,6 @@ func ErrorCtx(ctx context.Context, msg string, fields ...interface{}) {
 //	    return nil
 //	}
 func ErrCtx(ctx context.Context, err error, msg string, fields ...interface{}) {
-	logMu.RLock()
-	l := log
-	logMu.RUnlock()
+	l := global()
 	l.ErrCtx(ctx, err, msg, fields...)
 }

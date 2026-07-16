@@ -114,7 +114,7 @@ type Config struct {
 	// Default value is a function that writes a message in stderr.
 	DiodeAlertFunc func(int)
 
-	// UseDiodeWaiter if true, will enable diode waiter istead of poller.
+	// UseDiodeWaiter if true, will enable diode waiter instead of poller.
 	// Default value is false.
 	UseDiodeWaiter bool
 
@@ -349,7 +349,7 @@ func (c Config) WithWriter(w io.Writer) Config {
 // it doesn't exist. The file is added to the list of output writers.
 //
 // Returns the updated config, a closer for the file (you should call Close()
-// when done), and interface{} error that occurred during file opening.
+// when done), and any error that occurred during file opening.
 //
 // Default file permissions are 0644 if not specified.
 //
@@ -583,7 +583,7 @@ func (c Config) WithErrorCounter(ec ErrorCounter) Config {
 	return c
 }
 
-// WithErrorCounter returns [Config] with a simple [ErrorCounter].
+// WithSimpleErrorCounter returns [Config] with a simple [ErrorCounter].
 func (c Config) WithSimpleErrorCounter() Config {
 	c.ErrorCounter = newSimpleErrorCounter()
 	return c
@@ -637,8 +637,8 @@ func (c Config) WithPercentageSampler(percentage float64, levels ...string) Conf
 //
 //	config := logze.C().WithBurstSampler(0.1, 100, 1*time.Second, "debug", "info")
 //	logger := config.New()
-//	logger.Debug("This will be logged 10% of the time")
-//	logger.Info("This will be logged 10% of the time")
+//	logger.Debug("Logged up to 100 times per second, then 10% of the time")
+//	logger.Info("Logged up to 100 times per second, then 10% of the time")
 func (c Config) WithBurstSampler(percentage float64, burst int, period time.Duration, levels ...string) Config {
 	sampler := burstSampler(percentage, burst, period)
 	c.Sampler = getLevelSampler(sampler, levels...)
@@ -648,7 +648,7 @@ func (c Config) WithBurstSampler(percentage float64, burst int, period time.Dura
 // WithMaxSampler returns [Config] with a new max sampler.
 // Max is the maximum number of requests allowed per period.
 // Period is a time interval after which the max count resets.
-// interface{} requests beyond the max limit will be dropped.
+// Any requests beyond the max limit will be dropped.
 // Levels is an optional list of levels that will be sampled. If no levels are provided,
 // the sampler will be used for all levels.
 //
@@ -656,8 +656,8 @@ func (c Config) WithBurstSampler(percentage float64, burst int, period time.Dura
 //
 //	config := logze.C().WithMaxSampler(100, 1*time.Second, "debug", "info")
 //	logger := config.New()
-//	logger.Debug("This will be logged 10% of the time")
-//	logger.Info("This will be logged 10% of the time")
+//	logger.Debug("Logged at most 100 times per second")
+//	logger.Info("Logged at most 100 times per second")
 func (c Config) WithMaxSampler(max int, period time.Duration, levels ...string) Config {
 	sampler := burstSampler(0, max, period)
 	c.Sampler = getLevelSampler(sampler, levels...)
@@ -665,7 +665,8 @@ func (c Config) WithMaxSampler(max int, period time.Duration, levels ...string) 
 }
 
 func percentageSampler(percentage float64) zerolog.Sampler {
-	if percentage < 0 {
+	if percentage <= 0 {
+		// RandomSampler(0) never samples; also avoids division by zero below
 		return zerolog.RandomSampler(0)
 	}
 	if percentage > 1 {
@@ -750,8 +751,8 @@ type ErrorCounter interface {
 // SimpleErrorCounter is a thread-safe error counter using atomic operations.
 //
 // This implementation provides a basic error counting mechanism suitable for
-// most use cases. The Count field can be read directly to get the current
-// error count, and all operations are atomic for safe concurrent use.
+// most use cases. Use the Load method to read the current error count;
+// all operations are atomic for safe concurrent use.
 //
 // Example usage:
 //
@@ -760,7 +761,7 @@ type ErrorCounter interface {
 //
 //	if counter := logger.GetErrorCounter(); counter != nil {
 //		simple := counter.(*logze.SimpleErrorCounter)
-//		errorCount := simple.Count.Load()
+//		errorCount := simple.Load()
 //		if errorCount > threshold {
 //			// Take action based on error count
 //		}
@@ -780,6 +781,14 @@ func (c *SimpleErrorCounter) Inc(err error) {
 		return
 	}
 	atomic.AddUint64(&c.Count, 1)
+}
+
+// Load atomically returns the current error count.
+//
+// Use this method instead of reading the Count field directly to avoid
+// data races when the logger is used concurrently.
+func (c *SimpleErrorCounter) Load() uint64 {
+	return atomic.LoadUint64(&c.Count)
 }
 
 func newSimpleErrorCounter() *SimpleErrorCounter {

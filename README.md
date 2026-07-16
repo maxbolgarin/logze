@@ -208,7 +208,7 @@ logger.Debugf("User %s (ID: %d) performed action: %v", username, userID, action,
 **How formatted logging works:**
 
 1. **Format string processing**: The first part of the arguments is used for printf-style formatting
-2. **Structured fields**: interface{} remaining arguments after the format placeholders become structured key-value pairs
+2. **Structured fields**: any remaining arguments after the format placeholders become structured key-value pairs
 3. **Best of both worlds**: You get readable formatted messages plus searchable structured data
 
 **Example breakdown:**
@@ -348,7 +348,7 @@ logger.Info("health check") // Won't be printed
    - **Use case**: Debugging complex error conditions
    - **Performance impact**: Significant overhead, use sparingly
 
-3. **`WithSimpleErrorCounter()`**: Tracks how minterface{} errors have been logged
+3. **`WithSimpleErrorCounter()`**: Tracks how many errors have been logged
    - **Use case**: Monitoring and alerting based on error rates
    - **Access**: Use `logger.GetErrorCounter()` to get current count
 
@@ -364,13 +364,19 @@ logger.Info("health check") // Won't be printed
 
 ## 🌍 Global Logger
 
-These examples show how to use the global logger for convenience:
+These examples show how to use the global logger for convenience.
+
+The implicit global logger writes JSON to stderr **synchronously** (no diode
+writer), so importing logze never spawns a background goroutine and no buffered
+messages can be lost at exit. Calling `logze.Init` replaces it with a configured
+logger — `New` enables the non-blocking diode writer by default, so call
+`logze.CloseDiode()` before exit in that case:
 
 ```go
 // Initialize once at application start
 logze.Init(logze.C().WithConsoleJSON().WithLevel("info"), "app", "myservice")
 
-// Use interface{}where in your codebase
+// Use anywhere in your codebase
 logze.Info("Server starting", "port", 8080)
 logze.Err(err, "Failed to process request", "request_id", reqID)
 
@@ -474,7 +480,7 @@ logze.Info("User created", "email", email, "user_id", userID)
 
 - **🚀 High Performance**: 3x faster than `slog`, leveraging `zerolog`'s efficient engine
 - **📝 Clean Interface**: Simple, readable logging calls with structured fields
-- **🔧 Flexible Configuration**: Extensive configuration options for interface{} use case
+- **🔧 Flexible Configuration**: Extensive configuration options for any use case
 - **🎯 Zero Allocations**: Most operations don't allocate memory
 - **🔄 Easy Migration**: Compatible interface with `slog` patterns
 
